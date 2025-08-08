@@ -57,9 +57,9 @@
                         <p class="text-lg">for successfully completing the</p>
                         <h2 id="certificate-title" class="text-3xl font-semibold text-gray-700 mt-2"></h2>
                         <div class="flex justify-around items-center mt-12 text-sm">
-                            <div><p class="font-bold">MRC University</p><img src="https://googleusercontent.com/file_content/2" alt="MRC University Logo" class="mx-auto mt-2 h-16 object-contain"></div>
-                            <div><p class="font-bold">NextBizness</p><img src="https://placehold.co/120x60/e2e8f0/4a5568?text=NextBizness" alt="NextBizness Logo" class="mx-auto mt-2"></div>
-                            <div><p class="font-bold">MNC News</p><img src="https://googleusercontent.com/file_content/1" alt="MNC News Logo" class="mx-auto mt-2 h-16 object-contain"></div>
+                            <div><p class="font-bold">MRC University</p><img src="http://googleusercontent.com/file_content/3" alt="MRC University Logo" class="mx-auto mt-2 h-16 object-contain"></div>
+                            <div><p class="font-bold">NextBizness</p><img src="http://googleusercontent.com/file_content/1" alt="NextBizness Logo" class="mx-auto mt-2 h-16 object-contain"></div>
+                            <div><p class="font-bold">MNC News</p><img src="http://googleusercontent.com/file_content/2" alt="MNC News Logo" class="mx-auto mt-2 h-16 object-contain"></div>
                         </div>
                         <p class="text-xs mt-8 text-gray-500">Issued on: <span id="certificate-date"></span></p>
                     </div>
@@ -287,6 +287,9 @@
             const path = (await getDoc(doc(db, "paths", pathId))).data();
             const unitsSnapshot = await getDocs(collection(db, `paths/${pathId}/units`));
             const units = unitsSnapshot.docs.map(d => ({id: d.id, ...d.data()}));
+            const completedUnitsForPath = units.filter(unit => userData.completedUnits?.includes(unit.id));
+            const allUnitsCompleted = units.length > 0 && completedUnitsForPath.length === units.length;
+            const pathAlreadyPassed = userData.completedPaths?.includes(pathId);
 
             let html = `
                 <button onclick="showStudentHomepage()" class="mb-6 text-blue-600 hover:underline">&larr; All Paths</button>
@@ -307,6 +310,20 @@
                 `;
             });
             html += `</div>`;
+
+            if (pathAlreadyPassed) {
+                html += `<div class="mt-8 text-center bg-green-100 p-6 rounded-lg">
+                    <h3 class="text-2xl font-bold text-green-700">Path Completed!</h3>
+                    <button onclick="showCertificate('${path.certificateTitle}')" class="mt-4 bg-yellow-500 text-white px-6 py-2 rounded-md hover:bg-yellow-600">View Your Certificate</button>
+                </div>`;
+            } else if (allUnitsCompleted) {
+                html += `<div class="mt-8 text-center bg-blue-100 p-6 rounded-lg">
+                    <h3 class="text-2xl font-bold text-blue-700">Ready for the Final Test?</h3>
+                    <p class="mt-2">You've completed all the units in this path. Pass the final test to earn your certificate!</p>
+                    <button onclick="showFinalTest('${pathId}')" class="mt-4 bg-green-600 text-white px-8 py-3 rounded-md text-lg font-semibold">Take Final Test</button>
+                </div>`;
+            }
+
             studentContent().innerHTML = html;
         }
 
@@ -352,6 +369,88 @@
             });
             userData = (await getDoc(userDocRef)).data();
             showPathDetails(pathId);
+        }
+
+        window.showFinalTest = (pathId) => {
+            // In a real app, questions would be fetched from Firestore.
+            const questions = [
+                { q: "What is the primary goal of a for-profit business?", a: "To maximize shareholder wealth", o: ["To provide jobs", "To maximize shareholder wealth", "To create the best product"] },
+                { q: "Which document shows a company's financial position at a specific point in time?", a: "Balance Sheet", o: ["Income Statement", "Cash Flow Statement", "Balance Sheet"] },
+                { q: "What does SWOT analysis stand for?", a: "Strengths, Weaknesses, Opportunities, Threats", o: ["Sales, Workforce, Operations, Timing", "Strengths, Weaknesses, Opportunities, Threats", "Strategy, Work, Output, Team"] },
+                { q: "What is 'cash flow'?", a: "The movement of money in and out of a business", o: ["The company's total profit", "The movement of money in and out of a business", "The company's total sales"] },
+                { q: "Which of these is a variable cost?", a: "Raw materials", o: ["Rent", "Salaries", "Raw materials"] }
+            ];
+            
+            let html = `
+                <h2 class="text-3xl font-bold mb-6 text-center">Final Test</h2>
+                <div id="test-form" class="bg-white p-8 rounded-lg shadow-md">
+            `;
+            questions.forEach((q, index) => {
+                html += `<div class="mb-6">
+                    <p class="font-semibold mb-2">${index + 1}. ${q.q}</p>
+                    ${q.o.map(option => `
+                        <label class="block ml-4">
+                            <input type="radio" name="q${index}" value="${option}">
+                            <span class="ml-2">${option}</span>
+                        </label>
+                    `).join('')}
+                </div>`;
+            });
+            html += `<div class="text-center mt-8">
+                <button class="bg-blue-600 text-white px-8 py-3 rounded-md" onclick='submitFinalTest(${JSON.stringify(questions)}, "${pathId}")'>Submit Answers</button>
+            </div></div>`;
+            studentContent().innerHTML = html;
+        }
+
+        window.submitFinalTest = async (questions, pathId) => {
+            const form = document.getElementById('test-form');
+            let score = 0;
+            questions.forEach((q, index) => {
+                const selected = form.querySelector(`input[name="q${index}"]:checked`);
+                if (selected && selected.value === q.a) {
+                    score++;
+                }
+            });
+
+            const percentage = (score / questions.length) * 100;
+            const passed = percentage >= 80;
+
+            let html = `<div class="bg-white p-8 rounded-lg shadow-lg text-center">
+                <h2 class="text-3xl font-bold mb-4">Test Results</h2>
+                <p class="text-5xl font-bold ${passed ? 'text-green-500' : 'text-red-500'}">${percentage.toFixed(0)}%</p>
+                <p class="text-lg text-gray-600 mt-2">You answered ${score} out of ${questions.length} correctly.</p>`;
+
+            if (passed) {
+                const userDocRef = doc(db, "users", currentUser.uid);
+                await updateDoc(userDocRef, { completedPaths: arrayUnion(pathId) });
+                userData = (await getDoc(userDocRef)).data();
+                const path = (await getDoc(doc(db, "paths", pathId))).data();
+
+                html += `<p class="font-semibold mt-4">Congratulations, you passed!</p>
+                <button onclick="showCertificate('${path.certificateTitle}')" class="mt-6 bg-yellow-500 text-white px-6 py-2 rounded-md">Claim Your Certificate!</button>`;
+            } else {
+                html += `<p class="font-semibold mt-4">You did not pass. You need 80% to pass.</p>
+                <button onclick="showPathDetails('${pathId}')" class="mt-6 bg-red-500 text-white px-6 py-2 rounded-md">Back to Path</button>`;
+            }
+            html += `</div>`;
+            studentContent().innerHTML = html;
+        }
+
+        window.showCertificate = (certificateTitle) => {
+            document.getElementById('certificate-name').textContent = userData.name;
+            document.getElementById('certificate-title').textContent = certificateTitle;
+            document.getElementById('certificate-date').textContent = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+            openModal('certificate-modal');
+        }
+
+        window.downloadCertificate = () => {
+            const certificateNode = document.getElementById('certificate-wrapper');
+            html2canvas(certificateNode, { scale: 2, useCORS: true }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `NextBizness_Certificate.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            });
         }
 
         // --- ADMIN FUNCTIONS ---
@@ -500,7 +599,6 @@
 
         window.deletePath = async (pathId) => {
             if (!confirm('Delete this entire path and all its units/lessons? This cannot be undone.')) return;
-            // In a real app, use a Cloud Function for recursive deletion.
             await deleteDoc(doc(db, "paths", pathId));
             renderAdminPaths();
         }
@@ -536,7 +634,7 @@
             } else {
                 await addDoc(collection(db, `paths/${pathId}/units/${unitId}/lessons`), data);
             }
-            showUnitForm(pathId, unitId); // Go back to the unit form to see the updated list
+            showUnitForm(pathId, unitId);
         }
 
         window.deleteLesson = async (pathId, unitId, lessonId) => {
