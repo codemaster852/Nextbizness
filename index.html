@@ -195,7 +195,8 @@
         // --- GLOBAL STATE ---
         let currentUser = null;
         let userData = null;
-        const ADMIN_EMAILS = ['mostafa@example.com', 'osama@example.com']; // IMPORTANT: Change to your actual admin emails
+        // UPDATED: Admin email set to the one you provided.
+        const ADMIN_EMAILS = ['mostafaalatawy3@gmail.com']; 
 
         // --- CORE APP LOGIC ---
         onAuthStateChanged(auth, async (user) => {
@@ -230,8 +231,6 @@
                     }
                 } catch (error) {
                     console.error("Firestore Error after login:", error);
-                    // NEW: If we can't read the user profile, log them out and show an error.
-                    // This prevents the user from being "stuck".
                     await signOut(auth);
                     showError('login-error', `Login succeeded, but could not read your profile from the database. This is a Firestore Security Rules issue. Error: ${error.message}`);
                 }
@@ -245,7 +244,6 @@
         // --- VIEW MANAGEMENT & ERROR DISPLAY ---
         function showView(viewId) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active-view'));
-            // Hide loading view if it's not the target
             if (viewId !== 'loading-view') {
                 document.getElementById('loading-view').classList.remove('active-view');
             }
