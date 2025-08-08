@@ -17,10 +17,10 @@
         .view { display: none; }
         .active-view { display: block; }
         .certificate {
-            border: 12px solid #a16207;
-            padding: 2.5rem;
-            background-color: #fffbeb;
-            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ca8a04' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            border: 1px solid #e2e8f0;
+            padding: 2rem;
+            background-color: #f8fafc;
+            box-shadow: 0 0 0 10px #1e3a8a;
         }
         .admin-nav button.active {
             background-color: #1d4ed8;
@@ -36,7 +36,7 @@
             padding-bottom: 0;
         }
         .lesson-content.open {
-            max-height: 1000px; /* Adjust as needed */
+            max-height: 1000px;
             padding-top: 1rem;
             padding-bottom: 1rem;
         }
@@ -58,29 +58,8 @@
     </div>
 
     <div id="certificate-modal" class="modal fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4 z-50 opacity-0">
-        <div class="bg-white rounded-lg shadow-xl p-8 max-w-4xl w-full">
-            <h2 class="text-2xl font-bold mb-4 text-center">Congratulations!</h2>
-            <div id="certificate-display" class="mt-2">
-                <div id="certificate-wrapper" class="certificate mx-auto max-w-3xl">
-                    <div class="text-center">
-                        <h1 class="text-5xl font-bold text-gray-800" style="font-family: 'Garamond', serif;">Certificate of Completion</h1>
-                        <p class="text-lg mt-4">This certificate is proudly presented to</p>
-                        <p id="certificate-name" class="text-4xl font-semibold text-yellow-700 my-8"></p>
-                        <p class="text-lg">for successfully completing the</p>
-                        <h2 id="certificate-title" class="text-3xl font-semibold text-gray-700 mt-2"></h2>
-                        <div class="flex justify-around items-center mt-12 text-sm">
-                            <div><p class="font-bold">MRC University</p><img src="http://googleusercontent.com/file_content/3" alt="MRC University Logo" class="mx-auto mt-2 h-16 object-contain"></div>
-                            <div><p class="font-bold">NextBizness</p><img src="http://googleusercontent.com/file_content/1" alt="NextBizness Logo" class="mx-auto mt-2 h-16 object-contain"></div>
-                            <div><p class="font-bold">MNC News</p><img src="http://googleusercontent.com/file_content/2" alt="MNC News Logo" class="mx-auto mt-2 h-16 object-contain"></div>
-                        </div>
-                        <p class="text-xs mt-8 text-gray-500">Issued on: <span id="certificate-date"></span></p>
-                    </div>
-                </div>
-                 <div class="text-center mt-6 flex justify-center gap-4">
-                    <button onclick="downloadCertificate()" class="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 transition"><i class="fas fa-download mr-2"></i>Download</button>
-                    <button onclick="closeModal('certificate-modal')" class="bg-gray-300 text-gray-800 px-6 py-2 rounded-md hover:bg-gray-400 transition">Close</button>
-                </div>
-            </div>
+        <div id="certificate-modal-content" class="modal-content bg-white rounded-lg shadow-xl p-8 max-w-4xl w-full transform scale-95">
+            <!-- Dynamic content will be injected here -->
         </div>
     </div>
 
@@ -100,7 +79,7 @@
             storageBucket: "nextbuzness.appspot.com",
             messagingSenderId: "9188411983",
             appId: "1:9188411983:web:7e1d7dec6b62aa8965f83a",
-            measurementId: "G-EMYW513V6H"
+            measurementId: "G-EMYW113V6H"
         };
 
         // --- FIREBASE INITIALIZATION ---
@@ -299,8 +278,24 @@
             const path = (await getDoc(doc(db, "paths", pathId))).data();
             const unitsSnapshot = await getDocs(collection(db, `paths/${pathId}/units`));
             const units = unitsSnapshot.docs.map(d => ({id: d.id, ...d.data()}));
-            const completedUnitsForPath = units.filter(unit => userData.completedUnits?.includes(unit.id));
-            const allUnitsCompleted = units.length > 0 && completedUnitsForPath.length === units.length;
+            
+            let allUnitsCompleted = units.length > 0;
+            for (const unit of units) {
+                const lessonsSnapshot = await getDocs(collection(db, `paths/${pathId}/units/${unit.id}/lessons`));
+                const allLessonIdsInUnit = lessonsSnapshot.docs.map(d => d.id);
+                const unitIsComplete = allLessonIdsInUnit.every(id => userData.completedLessons?.includes(id));
+
+                if (unitIsComplete && !userData.completedUnits?.includes(unit.id)) {
+                    await updateDoc(doc(db, "users", currentUser.uid), { completedUnits: arrayUnion(unit.id) });
+                    userData.completedUnits.push(unit.id);
+                } else if (!unitIsComplete && userData.completedUnits?.includes(unit.id)) {
+                    await updateDoc(doc(db, "users", currentUser.uid), { completedUnits: arrayRemove(unit.id) });
+                    userData.completedUnits = userData.completedUnits.filter(id => id !== unit.id);
+                }
+
+                if (!unitIsComplete) allUnitsCompleted = false;
+            }
+
             const pathAlreadyPassed = userData.completedPaths?.includes(pathId);
 
             let html = `
@@ -326,12 +321,12 @@
             if (pathAlreadyPassed) {
                 html += `<div class="mt-8 text-center bg-green-100 p-6 rounded-lg">
                     <h3 class="text-2xl font-bold text-green-700">Path Completed!</h3>
-                    <button onclick="showCertificate('${path.certificateTitle}')" class="mt-4 bg-yellow-500 text-white px-6 py-2 rounded-md hover:bg-yellow-600">View Your Certificate</button>
+                    <button onclick="promptForCertificateName('${path.certificateTitle}')" class="mt-4 bg-yellow-500 text-white px-6 py-2 rounded-md hover:bg-yellow-600">View Your Certificate</button>
                 </div>`;
             } else if (allUnitsCompleted) {
                 html += `<div class="mt-8 text-center bg-blue-100 p-6 rounded-lg">
                     <h3 class="text-2xl font-bold text-blue-700">Ready for the Final Test?</h3>
-                    <p class="mt-2">You've completed all the units in this path. Pass the final test to earn your certificate!</p>
+                    <p class="mt-2">You've completed all the units. Pass the final test to earn your certificate!</p>
                     <button onclick="showFinalTest('${pathId}')" class="mt-4 bg-green-600 text-white px-8 py-3 rounded-md text-lg font-semibold">Take Final Test</button>
                 </div>`;
             }
@@ -373,9 +368,10 @@
                     html += `<p class="text-gray-700 whitespace-pre-wrap">${lesson.content}</p>`;
                 }
                 html += `   <div class="mt-6 text-right">
-                                <button onclick="markLessonComplete('${pathId}', '${unitId}', '${lesson.id}', ${lessons.length})" class="bg-green-600 text-white px-4 py-2 rounded-md text-sm ${isCompleted ? 'bg-gray-400' : ''}" ${isCompleted ? 'disabled' : ''}>
-                                    ${isCompleted ? 'Completed' : 'Complete & Continue'}
-                                </button>
+                                <label class="flex items-center justify-end cursor-pointer">
+                                    <span class="mr-3 font-semibold ${isCompleted ? 'text-green-600' : 'text-gray-600'}">${isCompleted ? 'Completed' : 'Mark as Complete'}</span>
+                                    <input type="checkbox" onchange="markLessonComplete('${pathId}', '${unitId}', '${lesson.id}')" class="h-6 w-6" ${isCompleted ? 'checked disabled' : ''}>
+                                </label>
                             </div>
                         </div></div>
                     </div>
@@ -401,20 +397,11 @@
             icon.classList.toggle('rotate-180');
         }
 
-        window.markLessonComplete = async (pathId, unitId, lessonId, totalLessonsInUnit) => {
+        window.markLessonComplete = async (pathId, unitId, lessonId) => {
             const userDocRef = doc(db, "users", currentUser.uid);
             await updateDoc(userDocRef, {
                 completedLessons: arrayUnion(lessonId)
             });
-            
-            const updatedUserData = (await getDoc(userDocRef)).data();
-            const lessonsInUnitSnapshot = await getDocs(collection(db, `paths/${pathId}/units/${unitId}/lessons`));
-            const completedInUnit = lessonsInUnitSnapshot.docs.filter(l => updatedUserData.completedLessons.includes(l.id));
-            
-            if (completedInUnit.length === totalLessonsInUnit) {
-                await updateDoc(userDocRef, { completedUnits: arrayUnion(unitId) });
-            }
-
             userData = (await getDoc(userDocRef)).data();
             showUnitDetails(pathId, unitId);
         }
@@ -427,7 +414,7 @@
             if (questions.length === 0) {
                 studentContent().innerHTML = `<div class="bg-white p-8 rounded-lg text-center">
                     <h3 class="text-xl font-semibold">Final Test Not Ready</h3>
-                    <p class="text-gray-500 mt-2">The final test for this path has not been created yet. Please check back later.</p>
+                    <p class="text-gray-500 mt-2">The final test for this path has not been created yet.</p>
                     <button onclick="showPathDetails('${pathId}')" class="mt-6 bg-blue-500 text-white px-6 py-2 rounded-md">Back to Path</button>
                 </div>`;
                 return;
@@ -438,7 +425,7 @@
                 <div id="test-form" class="bg-white p-8 rounded-lg shadow-md">
             `;
             questions.forEach((q, index) => {
-                const options = [...q.options].sort(() => Math.random() - 0.5); // Shuffle options
+                const options = [...q.options].sort(() => Math.random() - 0.5);
                 html += `<div class="mb-6">
                     <p class="font-semibold mb-2">${index + 1}. ${q.question}</p>
                     ${options.map(option => `
@@ -480,7 +467,7 @@
                 const path = (await getDoc(doc(db, "paths", pathId))).data();
 
                 html += `<p class="font-semibold mt-4">Congratulations, you passed!</p>
-                <button onclick="showCertificate('${path.certificateTitle}')" class="mt-6 bg-yellow-500 text-white px-6 py-2 rounded-md">Claim Your Certificate!</button>`;
+                <button onclick="promptForCertificateName('${path.certificateTitle}')" class="mt-6 bg-yellow-500 text-white px-6 py-2 rounded-md">Claim Your Certificate!</button>`;
             } else {
                 html += `<p class="font-semibold mt-4">You did not pass. You need 80% to pass.</p>
                 <button onclick="showPathDetails('${pathId}')" class="mt-6 bg-red-500 text-white px-6 py-2 rounded-md">Back to Path</button>`;
@@ -489,11 +476,46 @@
             studentContent().innerHTML = html;
         }
 
-        window.showCertificate = (certificateTitle) => {
-            document.getElementById('certificate-name').textContent = userData.name;
-            document.getElementById('certificate-title').textContent = certificateTitle;
-            document.getElementById('certificate-date').textContent = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        window.promptForCertificateName = (certificateTitle) => {
+            const modalContent = document.getElementById('certificate-modal-content');
+            modalContent.innerHTML = `
+                <h2 class="text-2xl font-bold mb-4 text-center">Claim Your Certificate</h2>
+                <p class="text-center mb-6">Enter your full name as you would like it to appear on the certificate.</p>
+                <input id="cert-name-input" class="w-full p-2 border rounded mb-4" placeholder="Your Full Name" value="${userData.name || ''}">
+                <div class="flex justify-end gap-4">
+                    <button onclick="closeModal('certificate-modal')" class="bg-gray-300 px-4 py-2 rounded">Cancel</button>
+                    <button onclick="showCertificate('${certificateTitle}')" class="bg-blue-600 text-white px-4 py-2 rounded">Generate Certificate</button>
+                </div>
+            `;
             openModal('certificate-modal');
+        }
+
+        window.showCertificate = (certificateTitle) => {
+            const name = document.getElementById('cert-name-input').value;
+            if (!name) { alert('Please enter your name.'); return; }
+
+            const modalContent = document.getElementById('certificate-modal-content');
+            modalContent.innerHTML = `
+                <div id="certificate-wrapper" class="certificate mx-auto max-w-3xl">
+                    <div class="text-center">
+                        <h1 class="text-5xl font-bold text-gray-800" style="font-family: 'Garamond', serif;">Certificate of Completion</h1>
+                        <p class="text-lg mt-4">This certificate is proudly presented to</p>
+                        <p id="certificate-name" class="text-4xl font-semibold text-blue-800 my-8">${name}</p>
+                        <p class="text-lg">for successfully completing the</p>
+                        <h2 id="certificate-title" class="text-3xl font-semibold text-gray-700 mt-2">${certificateTitle}</h2>
+                        <div class="flex justify-around items-center mt-12 text-sm">
+                            <div><p class="font-bold">MRC University</p><img src="https://i.postimg.cc/L86y6b5x/Gemini-Generated-Image-uqyn3quqyn3quqyn.jpg" alt="MRC Logo" class="mx-auto mt-2 h-16 object-contain"></div>
+                            <div><p class="font-bold">NextBizness</p><img src="https://i.postimg.cc/J4p0f5F5/ChatGPT-Image-8-2025-06-17-36.jpg" alt="NextBizness Logo" class="mx-auto mt-2 h-16 object-contain"></div>
+                            <div><p class="font-bold">MNC News</p><img src="https://i.postimg.cc/pXwL9YjV/MNC.jpg" alt="MNC News Logo" class="mx-auto mt-2 h-16 object-contain"></div>
+                        </div>
+                        <p class="text-xs mt-8 text-gray-500">Issued on: <span id="certificate-date">${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span></p>
+                    </div>
+                </div>
+                 <div class="text-center mt-6 flex justify-center gap-4">
+                    <button onclick="downloadCertificate()" class="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 transition"><i class="fas fa-download mr-2"></i>Download</button>
+                    <button onclick="closeModal('certificate-modal')" class="bg-gray-300 text-gray-800 px-6 py-2 rounded-md hover:bg-gray-400 transition">Close</button>
+                </div>
+            `;
         }
 
         window.downloadCertificate = () => {
