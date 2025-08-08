@@ -40,7 +40,7 @@
 
     <!-- MODALS (These live outside the main container to overlay everything) -->
     <div id="admin-modal" class="modal fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4 z-50 opacity-0">
-        <div id="admin-modal-content" class="modal-content bg-white rounded-lg shadow-xl p-8 max-w-2xl w-full transform scale-95">
+        <div id="admin-modal-content" class="modal-content bg-white rounded-lg shadow-xl p-8 max-w-2xl w-full transform scale-95 overflow-y-auto max-h-screen">
             <!-- Dynamic content will be injected here -->
         </div>
     </div>
@@ -350,9 +350,8 @@
             await updateDoc(userDocRef, {
                 completedUnits: arrayUnion(unitId)
             });
-            // Refresh user data
             userData = (await getDoc(userDocRef)).data();
-            showPathDetails(pathId); // Go back to the path view to see progress
+            showPathDetails(pathId);
         }
 
         // --- ADMIN FUNCTIONS ---
@@ -369,8 +368,8 @@
                 </div>
                 <div class="space-y-4">`;
 
-            for (const doc of pathsSnapshot.docs) {
-                const path = { id: doc.id, ...doc.data() };
+            for (const pathDoc of pathsSnapshot.docs) {
+                const path = { id: pathDoc.id, ...pathDoc.data() };
                 const unitsSnapshot = await getDocs(collection(db, `paths/${path.id}/units`));
                 html += `
                     <div class="bg-white p-6 rounded-lg shadow-md">
@@ -395,10 +394,7 @@
                                     const unit = {id: unitDoc.id, ...unitDoc.data()};
                                     return `<div class="p-3 bg-gray-50 rounded-md flex justify-between items-center">
                                         <span>${unit.title}</span>
-                                        <div>
-                                            <button onclick="showUnitForm('${path.id}', '${unit.id}')" class="text-blue-500 text-sm"><i class="fas fa-edit"></i></button>
-                                            <button onclick="deleteUnit('${path.id}', '${unit.id}')" class="text-red-500 text-sm ml-2"><i class="fas fa-trash"></i></button>
-                                        </div>
+                                        <button onclick="showUnitForm('${path.id}', '${unit.id}')" class="text-blue-500 text-sm"><i class="fas fa-edit"></i> Edit Unit & Lessons</button>
                                     </div>`;
                                 }).join('')}
                             </div>
@@ -427,16 +423,66 @@
 
         window.showUnitForm = async (pathId, unitId = null) => {
             let unit = {};
-            if (unitId) unit = (await getDoc(doc(db, `paths/${pathId}/units`, unitId))).data();
+            let lessons = [];
+            let title = unitId ? 'Edit Unit & Lessons' : 'Add Unit';
+
+            if (unitId) {
+                unit = (await getDoc(doc(db, `paths/${pathId}/units`, unitId))).data();
+                const lessonsSnapshot = await getDocs(collection(db, `paths/${pathId}/units/${unitId}/lessons`));
+                lessons = lessonsSnapshot.docs.map(d => ({id: d.id, ...d.data()}));
+            }
+
             const modalContent = document.getElementById('admin-modal-content');
             modalContent.innerHTML = `
-                <h2 class="text-2xl font-bold mb-4">${unitId ? 'Edit' : 'Add'} Unit</h2>
+                <h2 class="text-2xl font-bold mb-4">${title}</h2>
                 <input id="unit-title" class="w-full p-2 border rounded mb-4" placeholder="Unit Title" value="${unit.title || ''}">
-                <div class="flex justify-end gap-4">
+                
+                ${unitId ? `
+                <div class="border-t pt-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-xl font-semibold">Lessons</h3>
+                        <button onclick="showLessonForm('${pathId}', '${unitId}')" class="bg-green-500 text-white text-sm px-3 py-1 rounded-md hover:bg-green-600">Add Lesson</button>
+                    </div>
+                    <div id="lessons-list" class="space-y-2">
+                        ${lessons.map(lesson => `
+                            <div class="p-2 bg-gray-100 rounded flex justify-between items-center">
+                                <span>${lesson.title} (${lesson.type})</span>
+                                <div>
+                                    <button onclick="showLessonForm('${pathId}', '${unitId}', '${lesson.id}')" class="text-blue-500 text-sm mr-2"><i class="fas fa-edit"></i></button>
+                                    <button onclick="deleteLesson('${pathId}', '${unitId}', '${lesson.id}')" class="text-red-500 text-sm"><i class="fas fa-trash"></i></button>
+                                </div>
+                            </div>
+                        `).join('') || '<p class="text-gray-500 text-center p-2">No lessons yet.</p>'}
+                    </div>
+                </div>
+                ` : ''}
+
+                <div class="flex justify-end gap-4 mt-6">
                     <button onclick="closeModal('admin-modal')" class="bg-gray-300 px-4 py-2 rounded">Cancel</button>
-                    <button onclick="saveUnit('${pathId}', '${unitId || ''}')" class="bg-blue-600 text-white px-4 py-2 rounded">Save</button>
+                    <button onclick="saveUnit('${pathId}', '${unitId || ''}')" class="bg-blue-600 text-white px-4 py-2 rounded">Save Unit Title</button>
                 </div>`;
             openModal('admin-modal');
+        }
+
+        window.showLessonForm = async (pathId, unitId, lessonId = null) => {
+            let lesson = {};
+            if (lessonId) lesson = (await getDoc(doc(db, `paths/${pathId}/units/${unitId}/lessons`, lessonId))).data();
+            
+            const modalContent = document.getElementById('admin-modal-content');
+            modalContent.innerHTML = `
+                <h2 class="text-2xl font-bold mb-4">${lessonId ? 'Edit' : 'Add'} Lesson</h2>
+                <input id="lesson-title" class="w-full p-2 border rounded mb-2" placeholder="Lesson Title" value="${lesson.title || ''}">
+                <select id="lesson-type" class="w-full p-2 border rounded mb-2">
+                    <option value="text" ${lesson.type === 'text' ? 'selected' : ''}>Text</option>
+                    <option value="video" ${lesson.type === 'video' ? 'selected' : ''}>Video URL</option>
+                    <option value="image" ${lesson.type === 'image' ? 'selected' : ''}>Image URL</option>
+                </select>
+                <textarea id="lesson-content" class="w-full p-2 border rounded mb-4 h-40" placeholder="Lesson Content (Text or URL)">${lesson.content || ''}</textarea>
+                <div class="flex justify-end gap-4">
+                    <button onclick="showUnitForm('${pathId}', '${unitId}')" class="bg-gray-300 px-4 py-2 rounded">&larr; Back to Unit</button>
+                    <button onclick="saveLesson('${pathId}', '${unitId}', '${lessonId || ''}')" class="bg-blue-600 text-white px-4 py-2 rounded">Save Lesson</button>
+                </div>
+            `;
         }
 
         window.savePath = async (pathId) => {
@@ -453,7 +499,8 @@
         }
 
         window.deletePath = async (pathId) => {
-            if (!confirm('Delete this entire path?')) return;
+            if (!confirm('Delete this entire path and all its units/lessons? This cannot be undone.')) return;
+            // In a real app, use a Cloud Function for recursive deletion.
             await deleteDoc(doc(db, "paths", pathId));
             renderAdminPaths();
         }
@@ -461,16 +508,41 @@
         window.saveUnit = async (pathId, unitId) => {
             const data = { title: document.getElementById('unit-title').value };
             if (!data.title) { alert('Please enter a title.'); return; }
-            if (unitId) await updateDoc(doc(db, `paths/${pathId}/units`, unitId), data);
-            else await addDoc(collection(db, `paths/${pathId}/units`), data);
+            if (unitId) {
+                await updateDoc(doc(db, `paths/${pathId}/units`, unitId), data);
+            } else {
+                await addDoc(collection(db, `paths/${pathId}/units`), data);
+            }
             closeModal('admin-modal');
             renderAdminPaths();
         }
 
         window.deleteUnit = async (pathId, unitId) => {
-            if (!confirm('Delete this unit?')) return;
+            if (!confirm('Delete this unit and all its lessons?')) return;
             await deleteDoc(doc(db, `paths/${pathId}/units`, unitId));
             renderAdminPaths();
+        }
+
+        window.saveLesson = async (pathId, unitId, lessonId) => {
+            const data = {
+                title: document.getElementById('lesson-title').value,
+                type: document.getElementById('lesson-type').value,
+                content: document.getElementById('lesson-content').value
+            };
+            if (!data.title || !data.content) { alert('Please fill all fields.'); return; }
+            
+            if (lessonId) {
+                await updateDoc(doc(db, `paths/${pathId}/units/${unitId}/lessons`, lessonId), data);
+            } else {
+                await addDoc(collection(db, `paths/${pathId}/units/${unitId}/lessons`), data);
+            }
+            showUnitForm(pathId, unitId); // Go back to the unit form to see the updated list
+        }
+
+        window.deleteLesson = async (pathId, unitId, lessonId) => {
+            if (!confirm('Delete this lesson?')) return;
+            await deleteDoc(doc(db, `paths/${pathId}/units/${unitId}/lessons`, lessonId));
+            showUnitForm(pathId, unitId);
         }
 
     </script>
