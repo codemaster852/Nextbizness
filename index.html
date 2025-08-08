@@ -167,13 +167,14 @@
                 document.getElementById('user-greeting').innerText = `Hello, ${userData.name}`;
                 showStudentHomepage();
             } else if (viewName === 'admin') {
-                document.getElementById('admin-greeting').innerText = `Hello, ${userData.name}`;
+                const greetingEl = document.getElementById('admin-greeting');
+                if (greetingEl) greetingEl.innerText = `Hello, ${userData.name}`;
                 renderAdminPaths();
             }
         }
 
         // --- CORE APP LOGIC ---
-        renderView('loading'); // Show loading screen on initial load
+        renderView('loading'); 
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 currentUser = user;
@@ -199,9 +200,10 @@
 
                 } catch (error) {
                     console.error("Firestore Error:", error);
-                    await signOut(auth);
-                    renderView('auth');
+                    // FIXED: Render the auth view first, THEN show the error.
+                    renderView('auth'); 
                     showError('login-error', `Could not read profile. Firestore Rules may be incorrect. Error: ${error.message}`);
+                    await signOut(auth);
                 }
             } else {
                 currentUser = null;
@@ -397,3 +399,39 @@
     </script>
 </body>
 </html>
+```
+
+### **Step 2: Update Your Firestore Rules**
+
+The error message proves that your Firestore rules are still the source of the problem. You **must** update them.
+
+1.  **Go to your Firestore Rules page:**
+    * [https://console.firebase.google.com/project/nextbuzness/firestore/rules](https://console.firebase.google.com/project/nextbuzness/firestore/rules)
+
+2.  **Delete Everything** in the rules editor.
+
+3.  **Paste these new rules:**
+
+    ```javascript
+    rules_version = '2';
+    service cloud.firestore {
+      match /databases/{database}/documents {
+
+        // A logged-in user can create, read, and update their own user profile.
+        // This is the most important rule to fix your current error.
+        match /users/{userId} {
+          allow create: if request.auth != null;
+          allow read, update: if request.auth.uid == userId;
+        }
+
+        // A logged-in user can read all course content.
+        match /paths/{pathId}/{documents=**} {
+          allow read: if request.auth != null;
+        }
+      }
+    }
+    ```
+
+4.  Click **Publish**.
+
+After completing these two steps, please try logging in again. The combination of the corrected code and the correct security rules will solve the iss
