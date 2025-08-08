@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NextBizness - Business from Zero to Hero</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚀</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚀</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -373,7 +373,7 @@
                     html += `<p class="text-gray-700 whitespace-pre-wrap">${lesson.content}</p>`;
                 }
                 html += `   <div class="mt-6 text-right">
-                                <button onclick="markLessonComplete('${pathId}', '${unitId}', '${lesson.id}', ${JSON.stringify(lessons)})" class="bg-green-600 text-white px-4 py-2 rounded-md text-sm ${isCompleted ? 'bg-gray-400' : ''}" ${isCompleted ? 'disabled' : ''}>
+                                <button onclick="markLessonComplete('${pathId}', '${unitId}', '${lesson.id}', ${lessons.length})" class="bg-green-600 text-white px-4 py-2 rounded-md text-sm ${isCompleted ? 'bg-gray-400' : ''}" ${isCompleted ? 'disabled' : ''}>
                                     ${isCompleted ? 'Completed' : 'Complete & Continue'}
                                 </button>
                             </div>
@@ -401,16 +401,17 @@
             icon.classList.toggle('rotate-180');
         }
 
-        window.markLessonComplete = async (pathId, unitId, lessonId, allLessons) => {
+        window.markLessonComplete = async (pathId, unitId, lessonId, totalLessonsInUnit) => {
             const userDocRef = doc(db, "users", currentUser.uid);
             await updateDoc(userDocRef, {
                 completedLessons: arrayUnion(lessonId)
             });
             
-            // Check if this completes the unit
             const updatedUserData = (await getDoc(userDocRef)).data();
-            const completedInUnit = allLessons.filter(l => updatedUserData.completedLessons.includes(l.id));
-            if (completedInUnit.length === allLessons.length) {
+            const lessonsInUnitSnapshot = await getDocs(collection(db, `paths/${pathId}/units/${unitId}/lessons`));
+            const completedInUnit = lessonsInUnitSnapshot.docs.filter(l => updatedUserData.completedLessons.includes(l.id));
+            
+            if (completedInUnit.length === totalLessonsInUnit) {
                 await updateDoc(userDocRef, { completedUnits: arrayUnion(unitId) });
             }
 
@@ -418,20 +419,29 @@
             showUnitDetails(pathId, unitId);
         }
 
-        window.showFinalTest = (pathId) => {
-            const questions = [
-                { q: "What is the primary goal of a for-profit business?", a: "To maximize shareholder wealth", o: ["To provide jobs", "To maximize shareholder wealth", "To create the best product"] },
-                { q: "Which document shows a company's financial position at a specific point in time?", a: "Balance Sheet", o: ["Income Statement", "Cash Flow Statement", "Balance Sheet"] },
-            ];
+        window.showFinalTest = async (pathId) => {
+            studentContent().innerHTML = `<div class="text-center p-10"><i class="fas fa-spinner fa-spin text-3xl"></i></div>`;
+            const questionsSnapshot = await getDocs(collection(db, `paths/${pathId}/finalTest`));
+            const questions = questionsSnapshot.docs.map(d => ({id: d.id, ...d.data()}));
             
+            if (questions.length === 0) {
+                studentContent().innerHTML = `<div class="bg-white p-8 rounded-lg text-center">
+                    <h3 class="text-xl font-semibold">Final Test Not Ready</h3>
+                    <p class="text-gray-500 mt-2">The final test for this path has not been created yet. Please check back later.</p>
+                    <button onclick="showPathDetails('${pathId}')" class="mt-6 bg-blue-500 text-white px-6 py-2 rounded-md">Back to Path</button>
+                </div>`;
+                return;
+            }
+
             let html = `
                 <h2 class="text-3xl font-bold mb-6 text-center">Final Test</h2>
                 <div id="test-form" class="bg-white p-8 rounded-lg shadow-md">
             `;
             questions.forEach((q, index) => {
+                const options = [...q.options].sort(() => Math.random() - 0.5); // Shuffle options
                 html += `<div class="mb-6">
-                    <p class="font-semibold mb-2">${index + 1}. ${q.q}</p>
-                    ${q.o.map(option => `
+                    <p class="font-semibold mb-2">${index + 1}. ${q.question}</p>
+                    ${options.map(option => `
                         <label class="block ml-4">
                             <input type="radio" name="q${index}" value="${option}">
                             <span class="ml-2">${option}</span>
@@ -450,7 +460,7 @@
             let score = 0;
             questions.forEach((q, index) => {
                 const selected = form.querySelector(`input[name="q${index}"]:checked`);
-                if (selected && selected.value === q.a) {
+                if (selected && selected.value === q.correctAnswer) {
                     score++;
                 }
             });
@@ -529,7 +539,10 @@
                         <div class="border-t mt-4 pt-4">
                             <div class="flex justify-between items-center">
                                 <h4 class="font-semibold">Units (${unitsSnapshot.size})</h4>
-                                <button onclick="showUnitForm('${path.id}')" class="bg-gray-200 text-sm px-3 py-1 rounded-md hover:bg-gray-300">Add Unit</button>
+                                <div>
+                                    <button onclick="showTestForm('${path.id}')" class="bg-purple-500 text-white text-sm px-3 py-1 rounded-md hover:bg-purple-600 mr-2">Manage Test</button>
+                                    <button onclick="showUnitForm('${path.id}')" class="bg-gray-200 text-sm px-3 py-1 rounded-md hover:bg-gray-300">Add Unit</button>
+                                </div>
                             </div>
                             <div class="mt-2 space-y-2">
                                 ${unitsSnapshot.docs.map(unitDoc => {
@@ -625,6 +638,68 @@
                     <button onclick="saveLesson('${pathId}', '${unitId}', '${lessonId || ''}')" class="bg-blue-600 text-white px-4 py-2 rounded">Save Lesson</button>
                 </div>
             `;
+        }
+        
+        window.showTestForm = async (pathId) => {
+            const questionsSnapshot = await getDocs(collection(db, `paths/${pathId}/finalTest`));
+            const questions = questionsSnapshot.docs.map(d => ({id: d.id, ...d.data()}));
+            
+            const modalContent = document.getElementById('admin-modal-content');
+            modalContent.innerHTML = `
+                <h2 class="text-2xl font-bold mb-4">Manage Final Test</h2>
+                <div class="bg-gray-50 p-4 rounded-lg mb-6">
+                    <h3 class="font-semibold mb-2">Add New Question</h3>
+                    <input id="q-text" class="w-full p-2 border rounded mb-2" placeholder="Question Text">
+                    <input id="q-correct" class="w-full p-2 border rounded mb-2 bg-green-50" placeholder="Correct Answer">
+                    <input id="q-wrong1" class="w-full p-2 border rounded mb-2 bg-red-50" placeholder="Incorrect Answer 1">
+                    <input id="q-wrong2" class="w-full p-2 border rounded mb-2 bg-red-50" placeholder="Incorrect Answer 2">
+                    <input id="q-wrong3" class="w-full p-2 border rounded mb-2 bg-red-50" placeholder="Incorrect Answer 3">
+                    <button onclick="saveQuestion('${pathId}')" class="bg-blue-600 text-white px-4 py-2 rounded w-full">Add Question</button>
+                </div>
+                <div id="questions-list" class="space-y-2">
+                    ${questions.map(q => `
+                        <div class="p-2 bg-gray-100 rounded">
+                            <p class="font-semibold">${q.question}</p>
+                            <p class="text-sm text-green-600">Correct: ${q.correctAnswer}</p>
+                            <div class="text-right">
+                                <button onclick="deleteQuestion('${pathId}', '${q.id}')" class="text-red-500 text-sm"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                    `).join('') || '<p class="text-center text-gray-500">No questions yet.</p>'}
+                </div>
+                <div class="flex justify-end mt-6">
+                    <button onclick="closeModal('admin-modal')" class="bg-gray-300 px-4 py-2 rounded">Close</button>
+                </div>
+            `;
+            openModal('admin-modal');
+        }
+
+        window.saveQuestion = async (pathId) => {
+            const question = document.getElementById('q-text').value;
+            const correctAnswer = document.getElementById('q-correct').value;
+            const wrong1 = document.getElementById('q-wrong1').value;
+            const wrong2 = document.getElementById('q-wrong2').value;
+            const wrong3 = document.getElementById('q-wrong3').value;
+
+            if (!question || !correctAnswer || !wrong1 || !wrong2 || !wrong3) {
+                alert('Please fill out all fields for the question.');
+                return;
+            }
+
+            const data = {
+                question,
+                correctAnswer,
+                options: [correctAnswer, wrong1, wrong2, wrong3]
+            };
+
+            await addDoc(collection(db, `paths/${pathId}/finalTest`), data);
+            showTestForm(pathId); // Refresh the modal
+        }
+
+        window.deleteQuestion = async (pathId, questionId) => {
+            if (!confirm('Delete this question?')) return;
+            await deleteDoc(doc(db, `paths/${pathId}/finalTest`, questionId));
+            showTestForm(pathId);
         }
 
         window.savePath = async (pathId) => {
