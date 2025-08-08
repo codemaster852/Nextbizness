@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NextBizness - Business from Zero to Hero</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚀</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚀</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -28,6 +28,18 @@
         }
         .modal { transition: opacity 0.25s ease; }
         .modal-content { transition: transform 0.25s ease; }
+        .lesson-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-out, padding 0.5s ease-out;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+        .lesson-content.open {
+            max-height: 1000px; /* Adjust as needed */
+            padding-top: 1rem;
+            padding-bottom: 1rem;
+        }
     </style>
 </head>
 <body class="text-gray-800">
@@ -188,7 +200,7 @@
                         }
                     } else {
                         const name = user.displayName || "New User";
-                        userData = { name, email: user.email, joined: new Date(), isAdmin, completedUnits: [], completedPaths: [] };
+                        userData = { name, email: user.email, joined: new Date(), isAdmin, completedUnits: [], completedPaths: [], completedLessons: [] };
                         await setDoc(userDocRef, userData);
                     }
 
@@ -331,54 +343,85 @@
             studentContent().innerHTML = `<div class="text-center p-10"><i class="fas fa-spinner fa-spin text-3xl"></i></div>`;
             const unit = (await getDoc(doc(db, `paths/${pathId}/units`, unitId))).data();
             const lessonsSnapshot = await getDocs(collection(db, `paths/${pathId}/units/${unitId}/lessons`));
-            const lessons = lessonsSnapshot.docs.map(d => d.data());
+            const lessons = lessonsSnapshot.docs.map(d => ({id: d.id, ...d.data()}));
             
             let html = `
                 <button onclick="showPathDetails('${pathId}')" class="mb-6 text-blue-600 hover:underline">&larr; Back to Units</button>
                 <h2 class="text-3xl font-bold mb-6">${unit.title}</h2>
-                <div class="bg-white p-6 rounded-lg shadow-md space-y-6">
+                <div class="bg-white p-6 rounded-lg shadow-md space-y-2">
             `;
-            lessons.forEach(lesson => {
-                html += `<div class="p-4 border rounded-md">
-                    <h4 class="font-bold text-lg mb-2">${lesson.title}</h4>`;
+            lessons.forEach((lesson, index) => {
+                const isCompleted = userData.completedLessons?.includes(lesson.id);
+                const isLocked = index > 0 && !userData.completedLessons?.includes(lessons[index - 1].id);
+                
+                html += `
+                    <div class="border rounded-md overflow-hidden">
+                        <button onclick="toggleLesson(this)" class="w-full text-left p-4 flex justify-between items-center ${isLocked ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-gray-50 hover:bg-gray-100'}" ${isLocked ? 'disabled' : ''}>
+                            <div class="flex items-center">
+                                ${isCompleted ? '<i class="fas fa-check-circle text-green-500 mr-3"></i>' : (isLocked ? '<i class="fas fa-lock text-gray-400 mr-3"></i>' : '<i class="far fa-circle text-blue-500 mr-3"></i>')}
+                                <span class="font-semibold">${lesson.title}</span>
+                            </div>
+                            <i class="fas fa-chevron-down transform transition-transform"></i>
+                        </button>
+                        <div class="lesson-content bg-white px-4">
+                            <div class="py-4 border-t">`;
                 if (lesson.type === 'video') {
-                    html += `<div class="aspect-w-16 aspect-h-9"><iframe src="${lesson.content}" frameborder="0" allowfullscreen></iframe></div>`;
+                    html += `<div class="aspect-w-16 aspect-h-9"><iframe class="w-full h-full" src="${lesson.content}" frameborder="0" allowfullscreen></iframe></div>`;
                 } else if (lesson.type === 'image') {
                     html += `<img src="${lesson.content}" class="w-full h-auto rounded-md">`;
                 } else {
                     html += `<p class="text-gray-700 whitespace-pre-wrap">${lesson.content}</p>`;
                 }
-                html += `</div>`;
+                html += `   <div class="mt-6 text-right">
+                                <button onclick="markLessonComplete('${pathId}', '${unitId}', '${lesson.id}', ${JSON.stringify(lessons)})" class="bg-green-600 text-white px-4 py-2 rounded-md text-sm ${isCompleted ? 'bg-gray-400' : ''}" ${isCompleted ? 'disabled' : ''}>
+                                    ${isCompleted ? 'Completed' : 'Complete & Continue'}
+                                </button>
+                            </div>
+                        </div></div>
+                    </div>
+                `;
             });
 
-            const isCompleted = userData.completedUnits?.includes(unitId);
-            html += `
-                <div class="mt-8 text-center border-t pt-6">
-                    <button onclick="markUnitComplete('${unitId}', '${pathId}')" class="bg-green-600 text-white px-8 py-3 rounded-md text-lg font-semibold ${isCompleted ? 'bg-gray-400' : ''}" ${isCompleted ? 'disabled' : ''}>
-                        ${isCompleted ? 'Unit Completed' : 'Mark as Complete'}
-                    </button>
-                </div>
-            </div>`;
+            html += `</div>`;
             studentContent().innerHTML = html;
         }
 
-        window.markUnitComplete = async (unitId, pathId) => {
+        window.toggleLesson = (button) => {
+            const content = button.nextElementSibling;
+            const icon = button.querySelector('.fa-chevron-down');
+            
+            document.querySelectorAll('.lesson-content.open').forEach(openContent => {
+                if (openContent !== content) {
+                    openContent.classList.remove('open');
+                    openContent.previousElementSibling.querySelector('.fa-chevron-down').classList.remove('rotate-180');
+                }
+            });
+
+            content.classList.toggle('open');
+            icon.classList.toggle('rotate-180');
+        }
+
+        window.markLessonComplete = async (pathId, unitId, lessonId, allLessons) => {
             const userDocRef = doc(db, "users", currentUser.uid);
             await updateDoc(userDocRef, {
-                completedUnits: arrayUnion(unitId)
+                completedLessons: arrayUnion(lessonId)
             });
+            
+            // Check if this completes the unit
+            const updatedUserData = (await getDoc(userDocRef)).data();
+            const completedInUnit = allLessons.filter(l => updatedUserData.completedLessons.includes(l.id));
+            if (completedInUnit.length === allLessons.length) {
+                await updateDoc(userDocRef, { completedUnits: arrayUnion(unitId) });
+            }
+
             userData = (await getDoc(userDocRef)).data();
-            showPathDetails(pathId);
+            showUnitDetails(pathId, unitId);
         }
 
         window.showFinalTest = (pathId) => {
-            // In a real app, questions would be fetched from Firestore.
             const questions = [
                 { q: "What is the primary goal of a for-profit business?", a: "To maximize shareholder wealth", o: ["To provide jobs", "To maximize shareholder wealth", "To create the best product"] },
                 { q: "Which document shows a company's financial position at a specific point in time?", a: "Balance Sheet", o: ["Income Statement", "Cash Flow Statement", "Balance Sheet"] },
-                { q: "What does SWOT analysis stand for?", a: "Strengths, Weaknesses, Opportunities, Threats", o: ["Sales, Workforce, Operations, Timing", "Strengths, Weaknesses, Opportunities, Threats", "Strategy, Work, Output, Team"] },
-                { q: "What is 'cash flow'?", a: "The movement of money in and out of a business", o: ["The company's total profit", "The movement of money in and out of a business", "The company's total sales"] },
-                { q: "Which of these is a variable cost?", a: "Raw materials", o: ["Rent", "Salaries", "Raw materials"] }
             ];
             
             let html = `
