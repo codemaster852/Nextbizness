@@ -194,7 +194,7 @@
                         }
                     } else {
                         const name = user.displayName || "New User";
-                        userData = { name, email: user.email, joined: new Date(), isAdmin, completedUnits: [], completedPaths: [], completedLessons: [] };
+                        userData = { name, email: user.email, joined: new Date(), isAdmin, completedUnits: [], completedPaths: [], completedLessons: [], certificatesIssued: {} };
                         await setDoc(userDocRef, userData);
                     }
 
@@ -495,11 +495,20 @@
             studentContent().innerHTML = html;
         }
 
-        window.promptForCertificateName = (certificateTitle, pathId) => {
+        window.promptForCertificateName = async (certificateTitle, pathId) => {
+            const certCode = userData.certificatesIssued?.[pathId];
+            if (certCode) {
+                const certDoc = await getDoc(doc(db, "certificates", certCode));
+                if (certDoc.exists()) {
+                    generateAndShowCertificate(certificateTitle, pathId, certDoc.data());
+                    return;
+                }
+            }
+
             const modalContent = document.getElementById('certificate-modal-content');
             modalContent.innerHTML = `
                 <h2 class="text-2xl font-bold mb-4 text-center">Claim Your Certificate</h2>
-                <p class="text-center mb-6">Enter your full name as you would like it to appear on the certificate.</p>
+                <p class="text-center mb-6">Enter your full name as you would like it to appear on the certificate. This can only be done once.</p>
                 <input id="cert-name-input" class="w-full p-2 border rounded mb-4" placeholder="Your Full Name" value="${userData.name || ''}">
                 <div class="flex justify-end gap-4">
                     <button onclick="closeModal('certificate-modal')" class="bg-gray-300 px-4 py-2 rounded">Cancel</button>
@@ -509,20 +518,27 @@
             openModal('certificate-modal');
         }
 
-        window.generateAndShowCertificate = async (certificateTitle, pathId) => {
-            const name = document.getElementById('cert-name-input').value;
-            if (!name) { alert('Please enter your name.'); return; }
-            
-            const certCode = `NB-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-            const certData = {
-                code: certCode,
-                userName: name,
-                userId: currentUser.uid,
-                pathId: pathId,
-                pathTitle: certificateTitle,
-                issueDate: new Date()
-            };
-            await setDoc(doc(db, "certificates", certCode), certData);
+        window.generateAndShowCertificate = async (certificateTitle, pathId, existingCertData = null) => {
+            let name, certCode, issueDate;
+
+            if (existingCertData) {
+                name = existingCertData.userName;
+                certCode = existingCertData.code;
+                issueDate = existingCertData.issueDate.toDate();
+            } else {
+                name = document.getElementById('cert-name-input').value;
+                if (!name) { alert('Please enter your name.'); return; }
+                
+                certCode = `NB-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+                issueDate = new Date();
+                const certData = { code: certCode, userName: name, userId: currentUser.uid, pathId, pathTitle: certificateTitle, issueDate };
+                
+                await setDoc(doc(db, "certificates", certCode), certData);
+                await updateDoc(doc(db, "users", currentUser.uid), {
+                    [`certificatesIssued.${pathId}`]: certCode
+                });
+                userData = (await getDoc(doc(db, "users", currentUser.uid))).data();
+            }
 
             const modalContent = document.getElementById('certificate-modal-content');
             modalContent.innerHTML = `
@@ -538,7 +554,7 @@
                             <div><p class="font-bold">NextBizness</p><img src="https://i.ibb.co/J4p0f5F5/ChatGPT-Image-8-2025-06-17-36.jpg" alt="NextBizness Logo" class="mx-auto mt-2 h-16 object-contain"></div>
                             <div><p class="font-bold">MNC News</p><img src="https://i.ibb.co/pXwL9YjV/MNC.jpg" alt="MNC News Logo" class="mx-auto mt-2 h-16 object-contain"></div>
                         </div>
-                        <p class="text-xs mt-8 text-gray-500">Issued on: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                        <p class="text-xs mt-8 text-gray-500">Issued on: ${issueDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
                         <p class="text-xs mt-2 text-gray-400 font-mono">Verification Code: ${certCode}</p>
                     </div>
                 </div>
@@ -547,6 +563,7 @@
                     <button onclick="closeModal('certificate-modal')" class="bg-gray-300 text-gray-800 px-6 py-2 rounded-md hover:bg-gray-400 transition">Close</button>
                 </div>
             `;
+            if (!existingCertData) openModal('certificate-modal');
         }
 
         window.downloadCertificate = () => {
