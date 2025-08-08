@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NextBizness - Business from Zero to Hero</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚀</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -127,7 +128,8 @@
                         <div class="flex justify-around items-center mt-12 text-sm">
                             <div>
                                 <p class="font-bold">MRC University</p>
-                                <img src="http://googleusercontent.com/file_content/2" alt="MRC University Logo" class="mx-auto mt-2 h-16 object-contain">
+                                <!-- FIXED: Changed http to https -->
+                                <img src="https://googleusercontent.com/file_content/2" alt="MRC University Logo" class="mx-auto mt-2 h-16 object-contain">
                             </div>
                             <div>
                                 <p class="font-bold">NextBizness</p>
@@ -135,7 +137,8 @@
                             </div>
                              <div>
                                 <p class="font-bold">MNC News</p>
-                                <img src="http://googleusercontent.com/file_content/1" alt="MNC News Logo" class="mx-auto mt-2 h-16 object-contain">
+                                <!-- FIXED: Changed http to https -->
+                                <img src="https://googleusercontent.com/file_content/1" alt="MNC News Logo" class="mx-auto mt-2 h-16 object-contain">
                             </div>
                         </div>
                         <p class="text-xs mt-8 text-gray-500">Issued on: <span id="certificate-date"></span></p>
@@ -194,8 +197,8 @@
         // --- GLOBAL STATE ---
         let currentUser = null;
         let userData = null;
-        const ADMIN_UIDS = ['h1A9Z...']; // Replace with actual UIDs of Mostafa & Osama after they sign up
-        const ADMIN_EMAILS = ['mostafa@example.com', 'osama@example.com']; // Fallback check
+        // IMPORTANT: Replace these emails with the actual emails you will use for admin accounts.
+        const ADMIN_EMAILS = ['mostafa@example.com', 'osama@example.com'];
 
         // --- CORE APP LOGIC ---
 
@@ -205,6 +208,7 @@
                 currentUser = user;
                 const userDocRef = doc(db, "users", user.uid);
                 const userDocSnap = await getDoc(userDocRef);
+                
                 if (userDocSnap.exists()) {
                     userData = userDocSnap.data();
                     // Check if user is an admin
@@ -218,9 +222,24 @@
                         showStudentHomepage();
                     }
                 } else {
-                    // This case handles if a user exists in Auth but not Firestore. Should be rare.
-                    console.error("User document not found in Firestore!");
-                    showView('auth-view');
+                    // This can happen if auth succeeds but Firestore document creation fails.
+                    // We'll try to create it now just in case.
+                    console.warn("User document not found, attempting to create it now.");
+                    try {
+                        const name = user.displayName || "New User"; // Fallback name
+                        await setDoc(doc(db, "users", user.uid), {
+                            name: name,
+                            email: user.email,
+                            joined: new Date(),
+                            completedUnits: [],
+                            finalTestPassed: false
+                        });
+                        // Reload the page to ensure the app state is correct
+                        window.location.reload();
+                    } catch (e) {
+                        console.error("Failed to create user document on fallback:", e);
+                        showView('auth-view'); // Fallback to login
+                    }
                 }
             } else {
                 currentUser = null;
@@ -266,7 +285,6 @@
                     completedUnits: [],
                     finalTestPassed: false
                 });
-
                 // The onAuthStateChanged listener will handle the view change
             } catch (error) {
                 errorDiv.innerText = error.message;
@@ -294,36 +312,43 @@
         window.logoutUser = async () => {
             await signOut(auth);
             // The onAuthStateChanged listener will handle the view change
+            window.location.reload(); // Force a full reload to clear state
         };
 
         // --- STUDENT VIEW FUNCTIONS ---
         async function showStudentHomepage() {
             const contentEl = document.getElementById('student-main-content');
-            contentEl.innerHTML = `<div class="text-center"><i class="fas fa-spinner fa-spin text-3xl"></i></div>`;
+            contentEl.innerHTML = `<div class="text-center p-10"><i class="fas fa-spinner fa-spin text-3xl text-blue-500"></i></div>`;
 
-            const pathsCollection = collection(db, "paths");
-            const pathSnapshot = await getDocs(pathsCollection);
-            const pathsList = pathSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            try {
+                const pathsCollection = collection(db, "paths");
+                const pathSnapshot = await getDocs(pathsCollection);
+                const pathsList = pathSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-            contentEl.innerHTML = `
-                <h2 class="text-3xl font-bold mb-2">Business: From Zero to Hero</h2>
-                <p class="text-lg text-gray-600 mb-8">Your journey to becoming a business expert starts here. Select a path to begin.</p>
-                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6" id="paths-container">
-                    ${pathsList.map(path => `
-                        <div class="bg-white p-6 rounded-lg shadow-md hover:shadow-xl transition cursor-pointer" onclick="showPath('${path.id}')">
-                            <h3 class="text-xl font-bold text-blue-700">${path.title}</h3>
-                            <p class="text-gray-600 mt-2">${path.description}</p>
-                        </div>
-                    `).join('')}
-                </div>
-                <div id="final-test-container" class="mt-8"></div>
-            `;
-            // updateFinalTestButton(); // This will need to be adapted for Firestore
+                contentEl.innerHTML = `
+                    <h2 class="text-3xl font-bold mb-2">Business: From Zero to Hero</h2>
+                    <p class="text-lg text-gray-600 mb-8">Your journey to becoming a business expert starts here. Select a path to begin.</p>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6" id="paths-container">
+                        ${pathsList.length > 0 ? pathsList.map(path => `
+                            <div class="bg-white p-6 rounded-lg shadow-md hover:shadow-xl transition cursor-pointer" onclick="showPath('${path.id}')">
+                                <h3 class="text-xl font-bold text-blue-700">${path.title}</h3>
+                                <p class="text-gray-600 mt-2">${path.description}</p>
+                            </div>
+                        `).join('') : '<p class="text-gray-500 md:col-span-2 lg:col-span-3">No courses available yet. Please check back later.</p>'}
+                    </div>
+                    <div id="final-test-container" class="mt-8"></div>
+                `;
+                // updateFinalTestButton(); // This will need to be adapted for Firestore
+            } catch (error) {
+                console.error("Error fetching paths:", error);
+                contentEl.innerHTML = `<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4" role="alert">
+                    <p class="font-bold">Connection Error</p>
+                    <p>Could not load course content. Please ensure you have a stable internet connection and that the Firestore database is correctly set up.</p>
+                </div>`;
+            }
         }
 
         // ... More student functions for showing paths, units, tests would go here
-        // These will be similar to your original code but will fetch data from Firestore
-        // For brevity, I'll focus on the new Admin panel functionality
         
         // --- ADMIN VIEW FUNCTIONS ---
         function showAdminSection(sectionId) {
@@ -336,6 +361,10 @@
                     contentEl.innerHTML = `
                         <h2 class="text-2xl font-bold mb-4">Dashboard</h2>
                         <p>Welcome to the admin dashboard. Here you can manage the entire course content and user base.</p>
+                        <div class="mt-6 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4">
+                            <p class="font-bold">First-Time Setup</p>
+                            <p>If you haven't added the 'Financial Skills' course yet, open the browser console (F12) and run: <code>seedFinancialSkillsPath()</code></p>
+                        </div>
                     `;
                     break;
                 case 'admin-paths':
@@ -346,7 +375,7 @@
                     break;
             }
         }
-        window.showAdminSection = showAdminSection; // Make it globally accessible
+        window.showAdminSection = showAdminSection;
 
         async function renderPathManagement() {
             const contentEl = document.getElementById('admin-main-content');
@@ -358,19 +387,21 @@
                     <textarea id="new-path-desc" class="w-full p-2 border rounded mb-2" placeholder="Path Description"></textarea>
                     <button onclick="addPath()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Add Path</button>
                 </div>
-                <div id="paths-list" class="space-y-4"></div>
+                <div id="paths-list" class="space-y-4"><i class="fas fa-spinner fa-spin"></i> Loading paths...</div>
             `;
-            // Load existing paths
+            
             const pathsCollection = collection(db, "paths");
             const pathSnapshot = await getDocs(pathsCollection);
             const pathsListEl = document.getElementById('paths-list');
             pathsListEl.innerHTML = '';
             pathSnapshot.forEach(doc => {
                 pathsListEl.innerHTML += `
-                    <div class="bg-white p-4 rounded-lg shadow">
-                        <p class="font-bold">${doc.data().title}</p>
-                        <p class="text-sm text-gray-600">${doc.data().description}</p>
-                        <button onclick="deletePath('${doc.id}')" class="text-red-500 text-sm mt-2">Delete</button>
+                    <div class="bg-white p-4 rounded-lg shadow flex justify-between items-center">
+                        <div>
+                            <p class="font-bold">${doc.data().title}</p>
+                            <p class="text-sm text-gray-600">${doc.data().description}</p>
+                        </div>
+                        <button onclick="deletePath('${doc.id}')" class="text-red-500 hover:text-red-700 text-sm font-semibold">DELETE</button>
                     </div>
                 `;
             });
@@ -383,7 +414,7 @@
             renderPathManagement(); // Refresh list
         }
         window.deletePath = async (pathId) => {
-            if (!confirm('Are you sure you want to delete this path and all its content?')) return;
+            if (!confirm('Are you sure you want to delete this path and all its content? This cannot be undone.')) return;
             await deleteDoc(doc(db, "paths", pathId));
             // In a real app, you'd also delete all subcollections (units, lessons, etc.)
             renderPathManagement();
@@ -391,7 +422,7 @@
 
         async function renderUserManagement() {
             const contentEl = document.getElementById('admin-main-content');
-            contentEl.innerHTML = `<h2 class="text-2xl font-bold mb-4">User List</h2><div id="users-list-container"></div>`;
+            contentEl.innerHTML = `<h2 class="text-2xl font-bold mb-4">User List</h2><div id="users-list-container"><i class="fas fa-spinner fa-spin"></i> Loading users...</div>`;
             const usersContainer = document.getElementById('users-list-container');
             const usersSnapshot = await getDocs(collection(db, "users"));
             usersContainer.innerHTML = `
@@ -440,26 +471,29 @@
         }
         
         // --- INITIAL DATA SEEDING (for demonstration) ---
-        // This function can be run once from the browser console to add the new path
         window.seedFinancialSkillsPath = async () => {
             console.log("Seeding Financial Skills Path...");
-            const pathRef = await addDoc(collection(db, "paths"), {
+            const pathRef = doc(collection(db, "paths")); // Create a reference first
+            
+            const modules = [
+                { title: "Module 1 – Understanding Money in Business", lessons: [{title: "What is Finance?", type:"text", content:"An overview of the role of finance in business success, from funding to financial management."}, {title: "Types of Business Finance", type:"text", content:"Exploring the differences between personal and business finances and why it matters."}, {title: "Basic Financial Terms", type:"text", content:"Defining key terms like Revenue, Expenses, Profit, Assets, and Liabilities."}] },
+                { title: "Module 2 – Budgeting & Financial Planning", lessons: [{title: "Why Budgeting Matters", type:"text", content:"How a budget helps maintain profitability and avoid common financial pitfalls."}, {title: "How to Create a Business Budget", type:"text", content:"A step-by-step guide with practical examples for service and product businesses."}, {title: "Forecasting Revenue & Expenses", type:"text", content:"Techniques for predicting future income and costs to plan effectively."}]},
+                { title: "Module 3 – Managing Cash Flow", lessons: [{title: "Cash Flow Basics", type:"text", content:"Understanding the critical difference between being profitable and being cash-flow positive."}, {title: "Common Cash Flow Problems", type:"text", content:"Identifying causes of poor cash flow and strategies to fix them."}, {title: "Tools & Templates for Tracking", type:"text", content:"Using simple tools like Excel or Google Sheets to monitor your cash flow."}]},
+                { title: "Module 4 – Business Accounting Basics", lessons: [{title: "Bookkeeping Essentials", type:"text", content:"The fundamentals of recording financial transactions accurately and efficiently."}, {title: "The Balance Sheet Explained", type:"text", content:"A deep dive into Assets, Liabilities, and Equity to understand your company's financial position."}, {title: "Reading an Income Statement", type:"text", content:"How to analyze your Profit & Loss (P&L) statement to gauge performance."}]},
+                { title: "Module 5 – Smart Financial Decision-Making", lessons: [{title: "Cost-Benefit Analysis", type:"text", content:"A framework for evaluating whether a new project or investment is financially viable."}, {title: "Break-Even Analysis", type:"text", content:"Calculating the point at which your business starts making a profit."}, {title: "Reducing Financial Risks", type:"text", content:"Strategies like diversification, maintaining emergency funds, and using insurance to protect your business."}]}
+            ];
+
+            const batch = writeBatch(db);
+            
+            // Set the main path document
+            batch.set(pathRef, {
                 title: "Financial Skills – From Basics to Business Mastery",
                 description: "A comprehensive guide to understanding and managing money in your business."
             });
-            console.log("Path added with ID: ", pathRef.id);
-
-            const batch = writeBatch(db);
-
-            const modules = [
-                { title: "Module 1 – Understanding Money in Business", lessons: [{title: "What is Finance?", type:"text", content:"Role of finance in business success."}, {title: "Types of Business Finance", type:"text", content:"Personal vs. business finances."}, {title: "Basic Financial Terms", type:"text", content:"Revenue, expenses, profit, assets, liabilities."}] },
-                { title: "Module 2 – Budgeting & Financial Planning", lessons: [{title: "Why Budgeting Matters", type:"text", content:"Staying profitable and avoiding debt."}] },
-                // ... add all other modules and lessons here
-            ];
 
             for (const module of modules) {
                 const unitRef = doc(collection(db, "paths", pathRef.id, "units"));
-                batch.set(unitRef, { title: module.title });
+                batch.set(unitRef, { title: module.title, pathId: pathRef.id });
                 for (const lesson of module.lessons) {
                     const lessonRef = doc(collection(db, "paths", pathRef.id, "units", unitRef.id, "lessons"));
                     batch.set(lessonRef, lesson);
@@ -467,7 +501,8 @@
             }
 
             await batch.commit();
-            console.log("Financial Skills path and its content have been seeded successfully!");
+            alert("Financial Skills path and all its content have been seeded successfully! The page will now reload.");
+            window.location.reload();
         }
 
         // Make functions globally accessible from inline HTML onclick events
