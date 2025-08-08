@@ -124,6 +124,20 @@
                             <button onclick="signupUser()" class="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700">Sign Up</button>
                             <p class="text-center text-sm mt-4">Have an account? <a href="#" onclick="toggleAuthForms()" class="text-blue-600">Login</a></p>
                         </div>
+                        <div class="text-center mt-6 border-t pt-4">
+                            <a href="#" onclick="renderView('verify')" class="text-gray-500 hover:text-blue-600 text-sm">Verify a Certificate</a>
+                        </div>
+                    </div>
+                </div>`,
+            verify: `
+                <div class="min-h-screen flex items-center justify-center bg-gray-100">
+                    <div class="max-w-md w-full bg-white p-8 rounded-xl shadow-lg">
+                        <h2 class="text-3xl font-bold text-center text-gray-800 mb-2">Verify Certificate</h2>
+                        <p class="text-center text-gray-500 mb-6">Enter the unique code found on the certificate.</p>
+                        <input type="text" id="verify-code" placeholder="Certificate Code" class="w-full px-4 py-2 mb-4 border rounded-md">
+                        <button onclick="verifyCertificate()" class="w-full bg-indigo-600 text-white py-2 rounded-md hover:bg-indigo-700">Verify</button>
+                        <div id="verify-result" class="mt-4 text-center"></div>
+                        <p class="text-center text-sm mt-4"><a href="#" onclick="renderView('auth')" class="text-gray-500">&larr; Back to Login</a></p>
                     </div>
                 </div>`,
             student: `
@@ -143,6 +157,7 @@
                         <h1 class="text-2xl font-bold mb-8">Admin Panel</h1>
                         <ul class="flex-grow">
                             <li><button onclick="renderAdminPaths()" class="w-full text-left px-4 py-2 rounded-md hover:bg-gray-700"><i class="fas fa-road mr-2"></i>Paths</button></li>
+                            <li><button onclick="renderAdminVerify()" class="w-full text-left px-4 py-2 rounded-md hover:bg-gray-700"><i class="fas fa-check-circle mr-2"></i>Verify Certificate</button></li>
                         </ul>
                         <button onclick="logoutUser()" class="w-full bg-red-600 text-white py-2 rounded-md mt-4">Logout</button>
                     </nav>
@@ -150,7 +165,7 @@
                 </div>`
         };
 
-        function renderView(viewName, data = {}) {
+        window.renderView = (viewName, data = {}) => {
             appContainer.innerHTML = templates[viewName];
             if (viewName === 'student') {
                 document.getElementById('user-greeting').innerText = `Hello, ${userData.name}`;
@@ -283,6 +298,10 @@
             for (const unit of units) {
                 const lessonsSnapshot = await getDocs(collection(db, `paths/${pathId}/units/${unit.id}/lessons`));
                 const allLessonIdsInUnit = lessonsSnapshot.docs.map(d => d.id);
+                if (allLessonIdsInUnit.length === 0) {
+                    allUnitsCompleted = false;
+                    continue;
+                };
                 const unitIsComplete = allLessonIdsInUnit.every(id => userData.completedLessons?.includes(id));
 
                 if (unitIsComplete && !userData.completedUnits?.includes(unit.id)) {
@@ -321,7 +340,7 @@
             if (pathAlreadyPassed) {
                 html += `<div class="mt-8 text-center bg-green-100 p-6 rounded-lg">
                     <h3 class="text-2xl font-bold text-green-700">Path Completed!</h3>
-                    <button onclick="promptForCertificateName('${path.certificateTitle}')" class="mt-4 bg-yellow-500 text-white px-6 py-2 rounded-md hover:bg-yellow-600">View Your Certificate</button>
+                    <button onclick="promptForCertificateName('${path.certificateTitle}', '${pathId}')" class="mt-4 bg-yellow-500 text-white px-6 py-2 rounded-md hover:bg-yellow-600">View Your Certificate</button>
                 </div>`;
             } else if (allUnitsCompleted) {
                 html += `<div class="mt-8 text-center bg-blue-100 p-6 rounded-lg">
@@ -467,7 +486,7 @@
                 const path = (await getDoc(doc(db, "paths", pathId))).data();
 
                 html += `<p class="font-semibold mt-4">Congratulations, you passed!</p>
-                <button onclick="promptForCertificateName('${path.certificateTitle}')" class="mt-6 bg-yellow-500 text-white px-6 py-2 rounded-md">Claim Your Certificate!</button>`;
+                <button onclick="promptForCertificateName('${path.certificateTitle}', '${pathId}')" class="mt-6 bg-yellow-500 text-white px-6 py-2 rounded-md">Claim Your Certificate!</button>`;
             } else {
                 html += `<p class="font-semibold mt-4">You did not pass. You need 80% to pass.</p>
                 <button onclick="showPathDetails('${pathId}')" class="mt-6 bg-red-500 text-white px-6 py-2 rounded-md">Back to Path</button>`;
@@ -476,7 +495,7 @@
             studentContent().innerHTML = html;
         }
 
-        window.promptForCertificateName = (certificateTitle) => {
+        window.promptForCertificateName = (certificateTitle, pathId) => {
             const modalContent = document.getElementById('certificate-modal-content');
             modalContent.innerHTML = `
                 <h2 class="text-2xl font-bold mb-4 text-center">Claim Your Certificate</h2>
@@ -484,15 +503,26 @@
                 <input id="cert-name-input" class="w-full p-2 border rounded mb-4" placeholder="Your Full Name" value="${userData.name || ''}">
                 <div class="flex justify-end gap-4">
                     <button onclick="closeModal('certificate-modal')" class="bg-gray-300 px-4 py-2 rounded">Cancel</button>
-                    <button onclick="showCertificate('${certificateTitle}')" class="bg-blue-600 text-white px-4 py-2 rounded">Generate Certificate</button>
+                    <button onclick="generateAndShowCertificate('${certificateTitle}', '${pathId}')" class="bg-blue-600 text-white px-4 py-2 rounded">Generate Certificate</button>
                 </div>
             `;
             openModal('certificate-modal');
         }
 
-        window.showCertificate = (certificateTitle) => {
+        window.generateAndShowCertificate = async (certificateTitle, pathId) => {
             const name = document.getElementById('cert-name-input').value;
             if (!name) { alert('Please enter your name.'); return; }
+            
+            const certCode = `NB-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+            const certData = {
+                code: certCode,
+                userName: name,
+                userId: currentUser.uid,
+                pathId: pathId,
+                pathTitle: certificateTitle,
+                issueDate: new Date()
+            };
+            await setDoc(doc(db, "certificates", certCode), certData);
 
             const modalContent = document.getElementById('certificate-modal-content');
             modalContent.innerHTML = `
@@ -500,15 +530,16 @@
                     <div class="text-center">
                         <h1 class="text-5xl font-bold text-gray-800" style="font-family: 'Garamond', serif;">Certificate of Completion</h1>
                         <p class="text-lg mt-4">This certificate is proudly presented to</p>
-                        <p id="certificate-name" class="text-4xl font-semibold text-blue-800 my-8">${name}</p>
+                        <p class="text-4xl font-semibold text-blue-800 my-8">${name}</p>
                         <p class="text-lg">for successfully completing the</p>
-                        <h2 id="certificate-title" class="text-3xl font-semibold text-gray-700 mt-2">${certificateTitle}</h2>
+                        <h2 class="text-3xl font-semibold text-gray-700 mt-2">${certificateTitle}</h2>
                         <div class="flex justify-around items-center mt-12 text-sm">
-                            <div><p class="font-bold">MRC University</p><img src="https://i.postimg.cc/L86y6b5x/Gemini-Generated-Image-uqyn3quqyn3quqyn.jpg" alt="MRC Logo" class="mx-auto mt-2 h-16 object-contain"></div>
-                            <div><p class="font-bold">NextBizness</p><img src="https://i.postimg.cc/J4p0f5F5/ChatGPT-Image-8-2025-06-17-36.jpg" alt="NextBizness Logo" class="mx-auto mt-2 h-16 object-contain"></div>
-                            <div><p class="font-bold">MNC News</p><img src="https://i.postimg.cc/pXwL9YjV/MNC.jpg" alt="MNC News Logo" class="mx-auto mt-2 h-16 object-contain"></div>
+                            <div><p class="font-bold">MRC University</p><img src="https://i.ibb.co/L86y6b5x/Gemini-Generated-Image-uqyn3quqyn3quqyn.jpg" alt="MRC Logo" class="mx-auto mt-2 h-16 object-contain"></div>
+                            <div><p class="font-bold">NextBizness</p><img src="https://i.ibb.co/J4p0f5F5/ChatGPT-Image-8-2025-06-17-36.jpg" alt="NextBizness Logo" class="mx-auto mt-2 h-16 object-contain"></div>
+                            <div><p class="font-bold">MNC News</p><img src="https://i.ibb.co/pXwL9YjV/MNC.jpg" alt="MNC News Logo" class="mx-auto mt-2 h-16 object-contain"></div>
                         </div>
-                        <p class="text-xs mt-8 text-gray-500">Issued on: <span id="certificate-date">${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span></p>
+                        <p class="text-xs mt-8 text-gray-500">Issued on: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                        <p class="text-xs mt-2 text-gray-400 font-mono">Verification Code: ${certCode}</p>
                     </div>
                 </div>
                  <div class="text-center mt-6 flex justify-center gap-4">
@@ -526,6 +557,31 @@
                 link.href = canvas.toDataURL('image/png');
                 link.click();
             });
+        }
+        
+        window.verifyCertificate = async () => {
+            const code = document.getElementById('verify-code').value.trim();
+            const resultDiv = document.getElementById('verify-result');
+            if (!code) {
+                resultDiv.innerHTML = `<p class="text-red-500">Please enter a code.</p>`;
+                return;
+            }
+            const certDoc = await getDoc(doc(db, "certificates", code));
+            if (certDoc.exists()) {
+                const data = certDoc.data();
+                resultDiv.innerHTML = `
+                    <div class="p-4 bg-green-100 text-green-800 rounded-lg">
+                        <p class="font-bold"><i class="fas fa-check-circle"></i> Certificate Valid</p>
+                        <p>Issued to: <strong>${data.userName}</strong></p>
+                        <p>Course: <strong>${data.pathTitle}</strong></p>
+                        <p>Date: <strong>${data.issueDate.toDate().toLocaleDateString()}</strong></p>
+                    </div>
+                `;
+            } else {
+                resultDiv.innerHTML = `<div class="p-4 bg-red-100 text-red-800 rounded-lg">
+                    <p class="font-bold"><i class="fas fa-times-circle"></i> Certificate Not Found</p>
+                </div>`;
+            }
         }
 
         // --- ADMIN FUNCTIONS ---
@@ -580,6 +636,18 @@
             }
             html += `</div>`;
             adminContent.innerHTML = html;
+        }
+        
+        window.renderAdminVerify = () => {
+            const adminContent = document.getElementById('admin-main-content');
+            adminContent.innerHTML = `
+                <h2 class="text-3xl font-bold mb-6">Verify Certificate</h2>
+                <div class="bg-white p-8 rounded-lg shadow-md">
+                    <input type="text" id="verify-code" placeholder="Certificate Code" class="w-full px-4 py-2 mb-4 border rounded-md">
+                    <button onclick="verifyCertificate()" class="w-full bg-indigo-600 text-white py-2 rounded-md hover:bg-indigo-700">Verify</button>
+                    <div id="verify-result" class="mt-4 text-center"></div>
+                </div>
+            `;
         }
 
         window.showPathForm = async (pathId = null) => {
