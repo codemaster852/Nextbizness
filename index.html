@@ -26,6 +26,13 @@
             background-color: #1d4ed8;
             color: white;
         }
+        /* Modal styles */
+        .modal {
+            transition: opacity 0.25s ease;
+        }
+        .modal-content {
+            transition: transform 0.25s ease;
+        }
     </style>
 </head>
 <body class="text-gray-800">
@@ -89,18 +96,7 @@
                 </div>
             </div>
         </header>
-        <div class="flex">
-            <nav class="w-64 bg-gray-700 text-white min-h-screen p-4 admin-nav">
-                <ul>
-                    <li><button onclick="showAdminSection('admin-dashboard')" class="w-full text-left px-4 py-2 rounded-md hover:bg-gray-600 active"><i class="fas fa-tachometer-alt mr-2"></i>Dashboard</button></li>
-                    <li><button onclick="showAdminSection('admin-paths')" class="w-full text-left px-4 py-2 rounded-md hover:bg-gray-600"><i class="fas fa-road mr-2"></i>Manage Paths</button></li>
-                    <li><button onclick="showAdminSection('admin-users')" class="w-full text-left px-4 py-2 rounded-md hover:bg-gray-600"><i class="fas fa-users mr-2"></i>Manage Users</button></li>
-                </ul>
-            </nav>
-            <main id="admin-main-content" class="flex-1 p-8 bg-gray-100">
-                <!-- Admin content will be loaded here -->
-            </main>
-        </div>
+        <main id="admin-main-content" class="flex-1 p-8 bg-gray-100"></main>
     </div>
 
     <!-- 4. LOADING VIEW -->
@@ -111,11 +107,16 @@
         </div>
     </div>
 
-    <!-- MODALS (shared across views) -->
-    <div id="certificate-modal" class="fixed inset-0 bg-black bg-opacity-70 hidden items-center justify-center p-4 z-50">
+    <!-- MODALS -->
+    <div id="admin-modal" class="modal fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4 z-50">
+        <div id="admin-modal-content" class="modal-content bg-white rounded-lg shadow-xl p-8 max-w-2xl w-full transform scale-95">
+            <!-- Dynamic content will be injected here -->
+        </div>
+    </div>
+
+    <div id="certificate-modal" class="modal fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4 z-50">
         <div class="bg-white rounded-lg shadow-xl p-8 max-w-4xl w-full">
             <h2 class="text-2xl font-bold mb-4 text-center">Congratulations!</h2>
-            <p class="text-center mb-6">You've successfully completed the course. Your name is pre-filled below.</p>
             <div id="certificate-display" class="mt-2">
                 <div id="certificate-wrapper" class="certificate mx-auto max-w-3xl">
                     <div class="text-center">
@@ -123,28 +124,18 @@
                         <p class="text-lg mt-4">This certificate is proudly presented to</p>
                         <p id="certificate-name" class="text-4xl font-semibold text-yellow-700 my-8"></p>
                         <p class="text-lg">for successfully completing the</p>
-                        <h2 class="text-3xl font-semibold text-gray-700 mt-2">Business: From Zero to Hero</h2>
-                        <p class="text-md mt-8">This course covers foundational and advanced topics in business, including financial skills, business fundamentals, marketing, and strategic growth.</p>
+                        <h2 id="certificate-title" class="text-3xl font-semibold text-gray-700 mt-2"></h2>
                         <div class="flex justify-around items-center mt-12 text-sm">
-                            <div>
-                                <p class="font-bold">MRC University</p>
-                                <img src="https://googleusercontent.com/file_content/2" alt="MRC University Logo" class="mx-auto mt-2 h-16 object-contain">
-                            </div>
-                            <div>
-                                <p class="font-bold">NextBizness</p>
-                                <img src="https://placehold.co/120x60/e2e8f0/4a5568?text=NextBizness" alt="NextBizness Logo" class="mx-auto mt-2">
-                            </div>
-                             <div>
-                                <p class="font-bold">MNC News</p>
-                                <img src="https://googleusercontent.com/file_content/1" alt="MNC News Logo" class="mx-auto mt-2 h-16 object-contain">
-                            </div>
+                            <div><p class="font-bold">MRC University</p><img src="https://googleusercontent.com/file_content/2" alt="MRC University Logo" class="mx-auto mt-2 h-16 object-contain"></div>
+                            <div><p class="font-bold">NextBizness</p><img src="https://placehold.co/120x60/e2e8f0/4a5568?text=NextBizness" alt="NextBizness Logo" class="mx-auto mt-2"></div>
+                            <div><p class="font-bold">MNC News</p><img src="https://googleusercontent.com/file_content/1" alt="MNC News Logo" class="mx-auto mt-2 h-16 object-contain"></div>
                         </div>
                         <p class="text-xs mt-8 text-gray-500">Issued on: <span id="certificate-date"></span></p>
                     </div>
                 </div>
                  <div class="text-center mt-6 flex justify-center gap-4">
                     <button onclick="downloadCertificate()" class="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 transition"><i class="fas fa-download mr-2"></i>Download</button>
-                    <button onclick="closeCertificateModal()" class="bg-gray-300 text-gray-800 px-6 py-2 rounded-md hover:bg-gray-400 transition">Close</button>
+                    <button onclick="closeModal('certificate-modal')" class="bg-gray-300 text-gray-800 px-6 py-2 rounded-md hover:bg-gray-400 transition">Close</button>
                 </div>
             </div>
         </div>
@@ -155,28 +146,10 @@
     <script type="module">
         // --- FIREBASE SDK IMPORTS ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { 
-            getAuth, 
-            onAuthStateChanged, 
-            createUserWithEmailAndPassword, 
-            signInWithEmailAndPassword, 
-            signOut 
-        } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-        import { 
-            getFirestore, 
-            collection, 
-            doc, 
-            getDoc, 
-            setDoc, 
-            addDoc, 
-            getDocs,
-            updateDoc,
-            deleteDoc,
-            query,
-            writeBatch
-        } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, collection, doc, getDoc, setDoc, addDoc, getDocs, updateDoc, deleteDoc, query, writeBatch, where } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-        // --- FIREBASE CONFIG (as provided) ---
+        // --- FIREBASE CONFIG ---
         const firebaseConfig = {
             apiKey: "AIzaSyAdOpB618-pYq5iHJIErhFeaGUUlJ1KYew",
             authDomain: "nextbuzness.firebaseapp.com",
@@ -195,44 +168,47 @@
         // --- GLOBAL STATE ---
         let currentUser = null;
         let userData = null;
-        // UPDATED: Admin email set to the one you provided.
-        const ADMIN_EMAILS = ['mostafaalatawy3@gmail.com']; 
+        const ADMIN_EMAILS = ['mostafaalatawy3@gmail.com'];
 
         // --- CORE APP LOGIC ---
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 currentUser = user;
+                const isAdmin = ADMIN_EMAILS.includes(user.email);
+                const userDocRef = doc(db, "users", user.uid);
+                
                 try {
-                    const userDocRef = doc(db, "users", user.uid);
                     const userDocSnap = await getDoc(userDocRef);
                     
                     if (userDocSnap.exists()) {
                         userData = userDocSnap.data();
-                        if (ADMIN_EMAILS.includes(user.email)) {
-                            document.getElementById('admin-greeting').innerText = `Hello, ${userData.name}`;
-                            showView('admin-view');
-                            showAdminSection('admin-dashboard');
-                        } else {
-                            document.getElementById('user-greeting').innerText = `Hello, ${userData.name}`;
-                            showView('app-view');
-                            showStudentHomepage();
+                        // Ensure isAdmin flag is correctly set for admins
+                        if (isAdmin && !userData.isAdmin) {
+                            await updateDoc(userDocRef, { isAdmin: true });
+                            userData.isAdmin = true;
                         }
                     } else {
-                        console.warn("User document not found, attempting to create it now.");
+                        console.warn("User document not found, creating it now.");
                         const name = user.displayName || "New User";
-                        await setDoc(doc(db, "users", user.uid), { 
-                            name: name, 
-                            email: user.email, 
-                            joined: new Date(),
-                            completedUnits: [],
-                            finalTestPassed: false
-                        });
-                        window.location.reload();
+                        userData = { name, email: user.email, joined: new Date(), completedUnits: [], completedPaths: [], isAdmin };
+                        await setDoc(userDocRef, userData);
                     }
+
+                    // Redirect based on admin status
+                    if (userData.isAdmin) {
+                        document.getElementById('admin-greeting').innerText = `Hello, ${userData.name}`;
+                        showView('admin-view');
+                        renderAdminPaths();
+                    } else {
+                        document.getElementById('user-greeting').innerText = `Hello, ${userData.name}`;
+                        showView('app-view');
+                        showStudentHomepage();
+                    }
+
                 } catch (error) {
                     console.error("Firestore Error after login:", error);
                     await signOut(auth);
-                    showError('login-error', `Login succeeded, but could not read your profile from the database. This is a Firestore Security Rules issue. Error: ${error.message}`);
+                    showError('login-error', `Login succeeded, but could not read your profile. This is a Firestore Security Rules issue. Error: ${error.message}`);
                 }
             } else {
                 currentUser = null;
@@ -241,7 +217,7 @@
             }
         });
 
-        // --- VIEW MANAGEMENT & ERROR DISPLAY ---
+        // --- VIEW & MODAL MANAGEMENT ---
         function showView(viewId) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active-view'));
             if (viewId !== 'loading-view') {
@@ -267,18 +243,34 @@
             clearErrors();
         }
 
+        window.openModal = (modalId) => {
+            const modal = document.getElementById(modalId);
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modal.querySelector('.modal-content').classList.remove('scale-95');
+            }, 10);
+        }
+
+        window.closeModal = (modalId) => {
+            const modal = document.getElementById(modalId);
+            modal.classList.add('opacity-0');
+            modal.querySelector('.modal-content').classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }, 250);
+        }
+
         // --- AUTHENTICATION FUNCTIONS ---
         window.loginUser = async () => {
             clearErrors();
             const email = document.getElementById('login-email').value;
             const password = document.getElementById('login-password').value;
-            if (!email || !password) {
-                showError('login-error', "Please fill all fields.");
-                return;
-            }
+            if (!email || !password) { showError('login-error', "Please fill all fields."); return; }
             try {
                 await signInWithEmailAndPassword(auth, email, password);
-                // onAuthStateChanged will handle the view change
             } catch (error) {
                 console.error("Login Error:", error);
                 showError('login-error', `Login Failed: ${error.code}`);
@@ -290,13 +282,9 @@
             const name = document.getElementById('signup-name').value;
             const email = document.getElementById('signup-email').value;
             const password = document.getElementById('signup-password').value;
-            if (!name || !email || !password) {
-                showError('signup-error', "Please fill all fields.");
-                return;
-            }
+            if (!name || !email || !password) { showError('signup-error', "Please fill all fields."); return; }
             try {
                 await createUserWithEmailAndPassword(auth, email, password);
-                // onAuthStateChanged will handle creating the database record
             } catch (error) {
                 console.error("Signup Error:", error);
                 showError('signup-error', `Signup Failed: ${error.code}`);
@@ -310,165 +298,146 @@
         
         // --- STUDENT VIEW FUNCTIONS ---
         async function showStudentHomepage() {
-            const contentEl = document.getElementById('student-main-content');
-            contentEl.innerHTML = `<div class="text-center p-10"><i class="fas fa-spinner fa-spin text-3xl text-blue-500"></i></div>`;
+            // ... (Implementation would go here)
+        }
 
-            try {
-                const pathsCollection = collection(db, "paths");
-                const pathSnapshot = await getDocs(pathsCollection);
-                const pathsList = pathSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // --- ADMIN PANEL ---
+        const adminContent = document.getElementById('admin-main-content');
 
-                contentEl.innerHTML = `
-                    <h2 class="text-3xl font-bold mb-2">Business: From Zero to Hero</h2>
-                    <p class="text-lg text-gray-600 mb-8">Your journey to becoming a business expert starts here. Select a path to begin.</p>
-                    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6" id="paths-container">
-                        ${pathsList.length > 0 ? pathsList.map(path => `
-                            <div class="bg-white p-6 rounded-lg shadow-md hover:shadow-xl transition cursor-pointer" onclick="showPath('${path.id}')">
-                                <h3 class="text-xl font-bold text-blue-700">${path.title}</h3>
-                                <p class="text-gray-600 mt-2">${path.description}</p>
+        async function renderAdminPaths() {
+            adminContent.innerHTML = `<div class="text-center p-10"><i class="fas fa-spinner fa-spin text-3xl"></i></div>`;
+            const pathsSnapshot = await getDocs(collection(db, "paths"));
+            let html = `
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-3xl font-bold">Course Paths</h2>
+                    <button onclick="showPathForm()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                        <i class="fas fa-plus mr-2"></i>Add New Path
+                    </button>
+                </div>
+                <div class="space-y-4">
+            `;
+            for (const doc of pathsSnapshot.docs) {
+                const path = { id: doc.id, ...doc.data() };
+                const unitsSnapshot = await getDocs(collection(db, `paths/${path.id}/units`));
+                html += `
+                    <div class="bg-white p-4 rounded-lg shadow">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="text-xl font-bold">${path.title}</h3>
+                                <p class="text-gray-600">${path.description}</p>
+                                <p class="text-sm text-gray-500 mt-1">Certificate Title: ${path.certificateTitle || 'Not set'}</p>
                             </div>
-                        `).join('') : '<p class="text-gray-500 md:col-span-2 lg:col-span-3">No courses available yet. Please check back later.</p>'}
-                    </div>
-                    <div id="final-test-container" class="mt-8"></div>
-                `;
-            } catch (error) {
-                console.error("Error fetching paths:", error);
-                contentEl.innerHTML = `<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4" role="alert">
-                    <p class="font-bold">Database Error</p>
-                    <p>Could not load course content. The security rules for your Firestore database may be incorrect.</p>
-                </div>`;
-            }
-        }
-
-        // --- ADMIN VIEW FUNCTIONS ---
-        window.showAdminSection = (sectionId) => {
-            const contentEl = document.getElementById('admin-main-content');
-            document.querySelectorAll('.admin-nav button').forEach(b => b.classList.remove('active'));
-            document.querySelector(`.admin-nav button[onclick="showAdminSection('${sectionId}')"]`).classList.add('active');
-
-            switch(sectionId) {
-                case 'admin-dashboard':
-                    contentEl.innerHTML = `
-                        <h2 class="text-2xl font-bold mb-4">Dashboard</h2>
-                        <p>Welcome to the admin dashboard. Here you can manage the entire course content and user base.</p>
-                        <div class="mt-6 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4">
-                            <p class="font-bold">First-Time Setup</p>
-                            <p>If you haven't added the 'Financial Skills' course yet, open the browser console (F12) and run: <code>seedFinancialSkillsPath()</code></p>
+                            <div class="flex-shrink-0 ml-4">
+                                <button onclick="showPathForm('${path.id}')" class="text-blue-500 hover:text-blue-700 mr-2"><i class="fas fa-edit"></i></button>
+                                <button onclick="deletePath('${path.id}')" class="text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button>
+                            </div>
                         </div>
-                    `;
-                    break;
-                case 'admin-paths':
-                    renderPathManagement();
-                    break;
-                case 'admin-users':
-                    renderUserManagement();
-                    break;
+                        <div class="border-t mt-4 pt-4">
+                            <div class="flex justify-between items-center">
+                                <h4 class="font-semibold">Units (${unitsSnapshot.size})</h4>
+                                <button onclick="showUnitForm('${path.id}')" class="bg-gray-200 text-sm px-3 py-1 rounded-md hover:bg-gray-300">Add Unit</button>
+                            </div>
+                            <div class="mt-2 space-y-2">
+                                ${unitsSnapshot.docs.map(unitDoc => {
+                                    const unit = {id: unitDoc.id, ...unitDoc.data()};
+                                    return `<div class="p-2 bg-gray-50 rounded-md flex justify-between items-center">
+                                        <span>${unit.title}</span>
+                                        <div>
+                                            <button onclick="showUnitForm('${path.id}', '${unit.id}')" class="text-blue-500 hover:text-blue-700 mr-2 text-sm"><i class="fas fa-edit"></i></button>
+                                            <button onclick="deleteUnit('${path.id}', '${unit.id}')" class="text-red-500 hover:text-red-700 text-sm"><i class="fas fa-trash"></i></button>
+                                        </div>
+                                    </div>`;
+                                }).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
             }
+            html += `</div>`;
+            adminContent.innerHTML = html;
         }
 
-        async function renderPathManagement() {
-            const contentEl = document.getElementById('admin-main-content');
-            contentEl.innerHTML = `
-                <h2 class="text-2xl font-bold mb-4">Manage Paths</h2>
-                <div class="bg-white p-6 rounded-lg shadow-md mb-6">
-                    <h3 class="text-xl font-semibold mb-4">Add New Path</h3>
-                    <input id="new-path-title" class="w-full p-2 border rounded mb-2" placeholder="Path Title">
-                    <textarea id="new-path-desc" class="w-full p-2 border rounded mb-2" placeholder="Path Description"></textarea>
-                    <button onclick="addPath()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Add Path</button>
+        // FORM MODALS
+        window.showPathForm = async (pathId = null) => {
+            let path = {};
+            if (pathId) {
+                const docSnap = await getDoc(doc(db, "paths", pathId));
+                path = docSnap.data();
+            }
+            const modalContent = document.getElementById('admin-modal-content');
+            modalContent.innerHTML = `
+                <h2 class="text-2xl font-bold mb-4">${pathId ? 'Edit' : 'Add'} Path</h2>
+                <input id="path-title" class="w-full p-2 border rounded mb-2" placeholder="Path Title" value="${path.title || ''}">
+                <textarea id="path-desc" class="w-full p-2 border rounded mb-2" placeholder="Path Description">${path.description || ''}</textarea>
+                <input id="path-cert-title" class="w-full p-2 border rounded mb-4" placeholder="Certificate Title for this Path" value="${path.certificateTitle || ''}">
+                <div class="flex justify-end gap-4">
+                    <button onclick="closeModal('admin-modal')" class="bg-gray-300 px-4 py-2 rounded">Cancel</button>
+                    <button onclick="savePath('${pathId || ''}')" class="bg-blue-600 text-white px-4 py-2 rounded">Save Path</button>
                 </div>
-                <div id="paths-list" class="space-y-4"><i class="fas fa-spinner fa-spin"></i> Loading paths...</div>
             `;
+            openModal('admin-modal');
+        }
+
+        window.showUnitForm = async (pathId, unitId = null) => {
+            let unit = {};
+            if (unitId) {
+                const docSnap = await getDoc(doc(db, `paths/${pathId}/units`, unitId));
+                unit = docSnap.data();
+            }
+            const modalContent = document.getElementById('admin-modal-content');
+            modalContent.innerHTML = `
+                <h2 class="text-2xl font-bold mb-4">${unitId ? 'Edit' : 'Add'} Unit</h2>
+                <input id="unit-title" class="w-full p-2 border rounded mb-4" placeholder="Unit Title" value="${unit.title || ''}">
+                <div class="flex justify-end gap-4">
+                    <button onclick="closeModal('admin-modal')" class="bg-gray-300 px-4 py-2 rounded">Cancel</button>
+                    <button onclick="saveUnit('${pathId}', '${unitId || ''}')" class="bg-blue-600 text-white px-4 py-2 rounded">Save Unit</button>
+                </div>
+            `;
+            openModal('admin-modal');
+        }
+
+        // SAVE & DELETE LOGIC
+        window.savePath = async (pathId) => {
+            const data = {
+                title: document.getElementById('path-title').value,
+                description: document.getElementById('path-desc').value,
+                certificateTitle: document.getElementById('path-cert-title').value
+            };
+            if (!data.title || !data.description || !data.certificateTitle) { alert('Please fill all fields.'); return; }
             
-            const pathsCollection = collection(db, "paths");
-            const pathSnapshot = await getDocs(pathsCollection);
-            const pathsListEl = document.getElementById('paths-list');
-            pathsListEl.innerHTML = '';
-            pathSnapshot.forEach(doc => {
-                pathsListEl.innerHTML += `
-                    <div class="bg-white p-4 rounded-lg shadow flex justify-between items-center">
-                        <div>
-                            <p class="font-bold">${doc.data().title}</p>
-                            <p class="text-sm text-gray-600">${doc.data().description}</p>
-                        </div>
-                        <button onclick="deletePath('${doc.id}')" class="text-red-500 hover:text-red-700 text-sm font-semibold">DELETE</button>
-                    </div>
-                `;
-            });
+            if (pathId) {
+                await updateDoc(doc(db, "paths", pathId), data);
+            } else {
+                await addDoc(collection(db, "paths"), data);
+            }
+            closeModal('admin-modal');
+            renderAdminPaths();
         }
-        window.addPath = async () => {
-            const title = document.getElementById('new-path-title').value;
-            const description = document.getElementById('new-path-desc').value;
-            if (!title || !description) { alert('Please fill all fields'); return; }
-            await addDoc(collection(db, "paths"), { title, description });
-            renderPathManagement();
-        }
+
         window.deletePath = async (pathId) => {
-            if (!confirm('Are you sure you want to delete this path? This cannot be undone.')) return;
+            if (!confirm('Are you sure you want to delete this entire path and all its units?')) return;
+            // Note: This does not delete subcollections. For a production app, a Cloud Function is needed for that.
             await deleteDoc(doc(db, "paths", pathId));
-            renderPathManagement();
+            renderAdminPaths();
         }
 
-        async function renderUserManagement() {
-            const contentEl = document.getElementById('admin-main-content');
-            contentEl.innerHTML = `<h2 class="text-2xl font-bold mb-4">User List</h2><div id="users-list-container"><i class="fas fa-spinner fa-spin"></i> Loading users...</div>`;
-            const usersContainer = document.getElementById('users-list-container');
-            const usersSnapshot = await getDocs(collection(db, "users"));
-            usersContainer.innerHTML = `
-                <div class="bg-white rounded-lg shadow overflow-hidden">
-                    <table class="min-w-full">
-                        <thead class="bg-gray-200">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
-                            ${usersSnapshot.docs.map(doc => `
-                                <tr>
-                                    <td class="px-6 py-4 whitespace-nowrap">${doc.data().name}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap">${doc.data().email}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap">${new Date(doc.data().joined.seconds * 1000).toLocaleDateString()}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `;
-        }
-        
-        // --- DATA SEEDING FUNCTION ---
-        window.seedFinancialSkillsPath = async () => {
-            console.log("Seeding Financial Skills Path...");
-            const pathRef = doc(collection(db, "paths"));
+        window.saveUnit = async (pathId, unitId) => {
+            const data = { title: document.getElementById('unit-title').value };
+            if (!data.title) { alert('Please enter a title.'); return; }
             
-            const modules = [
-                { title: "Module 1 – Understanding Money in Business", lessons: [{title: "What is Finance?", type:"text", content:"An overview of the role of finance in business success, from funding to financial management."}, {title: "Types of Business Finance", type:"text", content:"Exploring the differences between personal and business finances and why it matters."}, {title: "Basic Financial Terms", type:"text", content:"Defining key terms like Revenue, Expenses, Profit, Assets, and Liabilities."}] },
-                { title: "Module 2 – Budgeting & Financial Planning", lessons: [{title: "Why Budgeting Matters", type:"text", content:"How a budget helps maintain profitability and avoid common financial pitfalls."}, {title: "How to Create a Business Budget", type:"text", content:"A step-by-step guide with practical examples for service and product businesses."}, {title: "Forecasting Revenue & Expenses", type:"text", content:"Techniques for predicting future income and costs to plan effectively."}]},
-                { title: "Module 3 – Managing Cash Flow", lessons: [{title: "Cash Flow Basics", type:"text", content:"Understanding the critical difference between being profitable and being cash-flow positive."}, {title: "Common Cash Flow Problems", type:"text", content:"Identifying causes of poor cash flow and strategies to fix them."}, {title: "Tools & Templates for Tracking", type:"text", content:"Using simple tools like Excel or Google Sheets to monitor your cash flow."}]},
-                { title: "Module 4 – Business Accounting Basics", lessons: [{title: "Bookkeeping Essentials", type:"text", content:"The fundamentals of recording financial transactions accurately and efficiently."}, {title: "The Balance Sheet Explained", type:"text", content:"A deep dive into Assets, Liabilities, and Equity to understand your company's financial position."}, {title: "Reading an Income Statement", type:"text", content:"How to analyze your Profit & Loss (P&L) statement to gauge performance."}]},
-                { title: "Module 5 – Smart Financial Decision-Making", lessons: [{title: "Cost-Benefit Analysis", type:"text", content:"A framework for evaluating whether a new project or investment is financially viable."}, {title: "Break-Even Analysis", type:"text", content:"Calculating the point at which your business starts making a profit."}, {title: "Reducing Financial Risks", type:"text", content:"Strategies like diversification, maintaining emergency funds, and using insurance to protect your business."}]}
-            ];
-
-            const batch = writeBatch(db);
-            
-            batch.set(pathRef, {
-                title: "Financial Skills – From Basics to Business Mastery",
-                description: "A comprehensive guide to understanding and managing money in your business."
-            });
-
-            for (const module of modules) {
-                const unitRef = doc(collection(db, "paths", pathRef.id, "units"));
-                batch.set(unitRef, { title: module.title, pathId: pathRef.id });
-                for (const lesson of module.lessons) {
-                    const lessonRef = doc(collection(db, "paths", pathRef.id, "units", unitRef.id, "lessons"));
-                    batch.set(lessonRef, lesson);
-                }
+            if (unitId) {
+                await updateDoc(doc(db, `paths/${pathId}/units`, unitId), data);
+            } else {
+                await addDoc(collection(db, `paths/${pathId}/units`), data);
             }
+            closeModal('admin-modal');
+            renderAdminPaths();
+        }
 
-            await batch.commit();
-            alert("Financial Skills path and all its content have been seeded successfully! The page will now reload.");
-            window.location.reload();
+        window.deleteUnit = async (pathId, unitId) => {
+            if (!confirm('Are you sure you want to delete this unit?')) return;
+            await deleteDoc(doc(db, `paths/${pathId}/units`, unitId));
+            renderAdminPaths();
         }
 
     </script>
