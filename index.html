@@ -201,26 +201,24 @@
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 currentUser = user;
-                const userDocRef = doc(db, "users", user.uid);
-                const userDocSnap = await getDoc(userDocRef);
-                
-                if (userDocSnap.exists()) {
-                    userData = userDocSnap.data();
-                    if (ADMIN_EMAILS.includes(user.email)) {
-                        document.getElementById('admin-greeting').innerText = `Hello, ${userData.name}`;
-                        showView('admin-view');
-                        showAdminSection('admin-dashboard');
+                try {
+                    const userDocRef = doc(db, "users", user.uid);
+                    const userDocSnap = await getDoc(userDocRef);
+                    
+                    if (userDocSnap.exists()) {
+                        userData = userDocSnap.data();
+                        if (ADMIN_EMAILS.includes(user.email)) {
+                            document.getElementById('admin-greeting').innerText = `Hello, ${userData.name}`;
+                            showView('admin-view');
+                            showAdminSection('admin-dashboard');
+                        } else {
+                            document.getElementById('user-greeting').innerText = `Hello, ${userData.name}`;
+                            showView('app-view');
+                            showStudentHomepage();
+                        }
                     } else {
-                        document.getElementById('user-greeting').innerText = `Hello, ${userData.name}`;
-                        showView('app-view');
-                        showStudentHomepage();
-                    }
-                } else {
-                    // This case handles when an auth user exists but their profile document doesn't.
-                    // This can happen if the signup process was interrupted.
-                    console.warn("User document not found, attempting to create it now.");
-                    try {
-                        const name = user.displayName || "New User"; // A fallback name
+                        console.warn("User document not found, attempting to create it now.");
+                        const name = user.displayName || "New User";
                         await setDoc(doc(db, "users", user.uid), { 
                             name: name, 
                             email: user.email, 
@@ -228,15 +226,16 @@
                             completedUnits: [],
                             finalTestPassed: false
                         });
-                        window.location.reload(); // Reload to ensure the app state is correct
-                    } catch (e) {
-                        console.error("CRITICAL: Failed to create user document on fallback:", e);
-                        showError('signup-error', `Your account was created, but could not save your profile. Please contact support. Error: ${e.message}`);
-                        showView('auth-view');
+                        window.location.reload();
                     }
+                } catch (error) {
+                    console.error("Firestore Error after login:", error);
+                    // NEW: If we can't read the user profile, log them out and show an error.
+                    // This prevents the user from being "stuck".
+                    await signOut(auth);
+                    showError('login-error', `Login succeeded, but could not read your profile from the database. This is a Firestore Security Rules issue. Error: ${error.message}`);
                 }
             } else {
-                // No user is logged in
                 currentUser = null;
                 userData = null;
                 showView('auth-view');
@@ -246,6 +245,10 @@
         // --- VIEW MANAGEMENT & ERROR DISPLAY ---
         function showView(viewId) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active-view'));
+            // Hide loading view if it's not the target
+            if (viewId !== 'loading-view') {
+                document.getElementById('loading-view').classList.remove('active-view');
+            }
             document.getElementById(viewId).classList.add('active-view');
         }
         
@@ -294,8 +297,8 @@
                 return;
             }
             try {
-                // The onAuthStateChanged listener will handle creating the database record after the user is created.
                 await createUserWithEmailAndPassword(auth, email, password);
+                // onAuthStateChanged will handle creating the database record
             } catch (error) {
                 console.error("Signup Error:", error);
                 showError('signup-error', `Signup Failed: ${error.code}`);
@@ -304,7 +307,7 @@
 
         window.logoutUser = async () => {
             await signOut(auth);
-            window.location.reload(); // Force a full reload to clear all state
+            window.location.reload();
         };
         
         // --- STUDENT VIEW FUNCTIONS ---
